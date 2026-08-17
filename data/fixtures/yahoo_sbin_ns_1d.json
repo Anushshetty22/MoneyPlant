@@ -1,0 +1,84 @@
+{
+  "chart": {
+    "result": [
+      {
+        "meta": {
+          "currency": "INR",
+          "symbol": "SBIN.NS",
+          "exchangeName": "NSI",
+          "fullExchangeName": "NSE",
+          "instrumentType": "EQUITY",
+          "firstTradeDate": 820467900,
+          "regularMarketTime": 1786355100,
+          "hasPrePostMarketData": false,
+          "gmtoffset": 19800,
+          "timezone": "IST",
+          "exchangeTimezoneName": "Asia/Kolkata",
+          "regularMarketPrice": 1071,
+          "fiftyTwoWeekHigh": 1234.7,
+          "fiftyTwoWeekLow": 798.5,
+          "regularMarketDayHigh": 1113.3,
+          "regularMarketDayLow": 1068.6,
+          "regularMarketVolume": 16617162,
+          "longName": "State Bank of India",
+          "shortName": "STATE BANK OF INDIA",
+          "chartPreviousClose": 1042.7,
+          "priceHint": 2,
+          "currentTradingPeriod": {
+            "pre": {
+              "timezone": "IST",
+              "start": 1786419900,
+              "end": 1786419900,
+              "gmtoffset": 19800
+            },
+            "regular": {
+              "timezone": "IST",
+              "start": 1786419900,
+              "end": 1786442400,
+              "gmtoffset": 19800
+            },
+            "post": {
+              "timezone": "IST",
+              "start": 1786442400,
+              "end": 1786442400,
+              "gmtoffset": 19800
+            }
+          },
+          "dataGranularity": "1d",
+          "range": "5d",
+          "validRanges": [
+            "1d",
+            "5d",
+            "1mo",
+            "3mo",
+            "6mo",
+            "1y",
+            "2y",
+            "5y",
+            "10y",
+            "ytd",
+            "max"
+          ]
+        },
+        "timestamp": [1785815100, 1785901500, 1785987900, 1786074300, 1786333500],
+        "indicators": {
+          "quote": [
+            {
+              "low": [1030.90002441406, 1040.30004882813, 1052.5, 1075.69995117188, 1068.59997558594],
+              "high": [1047.59997558594, 1055, 1088.09997558594, 1124.5, 1113.30004882813],
+              "close": [1042.69995117188, 1055, 1085, 1097.19995117188, 1071],
+              "open": [1047.59997558594, 1043, 1052.5, 1080.09997558594, 1108],
+              "volume": [8544184, 8707119, 13822265, 29410622, 16623448]
+            }
+          ],
+          "adjclose": [
+            {
+              "adjclose": [1042.69995117188, 1055, 1085, 1097.19995117188, 1071]
+            }
+          ]
+        }
+      }
+    ],
+    "error": null
+  }
+}
