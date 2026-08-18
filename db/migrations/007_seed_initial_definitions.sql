@@ -19,8 +19,9 @@ VALUES (
     'Bitcoin / Tether',
     'crypto',
     'Binance',
-    'USDT',
-    '{"price_policy": "unadjusted"}'::JSONB
+    -- The schema stores a three-letter reporting currency; preserve Binance's four-character quote asset in metadata.
+    'USD',
+    '{"price_policy": "unadjusted", "quote_asset": "USDT"}'::JSONB
 )
 ON CONFLICT (canonical_symbol) DO NOTHING;
 
