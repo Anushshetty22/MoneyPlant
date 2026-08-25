@@ -1,0 +1,136 @@
+package database
+
+import (
+	// context carries cancellation and deadlines into the generated query methods.
+	"context"
+	// fmt adds the operation and symbol to errors returned to the application layer.
+	"fmt"
+
+	"github.com/Anushshetty22/MoneyPlant/backend/internal/database/generated"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+// InstrumentRepository is the application-facing wrapper around sqlc-generated queries.
+//
+// Phase 3.3 update: the handwritten SQL repository was replaced with this thin
+// wrapper. SQL now lives in db/query/instruments.sql, while sqlc-generated code
+// handles parameters, QueryRow, and Scan. This wrapper keeps generated details
+// out of future HTTP handlers and gives us a stable place for application logic.
+type InstrumentRepository struct {
+	queries *generated.Queries
+}
+
+// Instrument is the application model returned by the repository.
+//
+// The generated sqlc models use pgtype.Text for nullable PostgreSQL text. The
+// wrapper converts that database-specific representation into *string, which
+// is easier for the rest of the application to understand.
+type Instrument struct {
+	ID              int64
+	CanonicalSymbol string
+	Name            string
+	AssetType       string
+	Exchange        *string
+	Currency        string
+	IsActive        bool
+	Metadata        []byte
+}
+
+// NewInstrumentRepository creates the wrapper using the existing connection pool.
+//
+// generated.New does not open another connection. It stores the pool behind the
+// generated query executor, so every repository call can reuse pgxpool's managed
+// connections.
+func NewInstrumentRepository(pool *pgxpool.Pool) *InstrumentRepository {
+	return &InstrumentRepository{
+		queries: generated.New(pool),
+	}
+}
+
+// Create inserts one canonical instrument and returns the application model.
+//
+// The method converts the optional exchange into pgtype.Text because that is the
+// type expected by the generated sqlc parameter struct. It then calls the
+// generated method, converts the generated row into the application model, and
+// returns any database error with operation context.
+func (r *InstrumentRepository) Create(
+	ctx context.Context,
+	canonicalSymbol string,
+	name string,
+	assetType string,
+	exchange *string,
+	currency string,
+	metadata []byte,
+) (Instrument, error) {
+	// pgtype.Text explicitly carries both a text value and whether PostgreSQL
+	// should treat it as NULL. This is different from an empty string.
+	exchangeValue := pgtype.Text{}
+	if exchange != nil {
+		exchangeValue = pgtype.Text{String: *exchange, Valid: true}
+	}
+
+	// sqlc-generated code now performs the INSERT, binds parameters safely, and
+	// scans the RETURNING row into a generated result type.
+	row, err := r.queries.CreateInstrument(ctx, generated.CreateInstrumentParams{
+		CanonicalSymbol: canonicalSymbol,
+		Name:            name,
+		AssetType:       assetType,
+		Exchange:        exchangeValue,
+		Currency:        currency,
+		Metadata:        metadata,
+	})
+	if err != nil {
+		return Instrument{}, fmt.Errorf("create instrument %q: %w", canonicalSymbol, err)
+	}
+
+	// Convert the generated database row into the smaller application model.
+	return instrumentFromGenerated(row.ID, row.CanonicalSymbol, row.Name, row.AssetType, row.Exchange, row.Currency, row.IsActive, row.Metadata), nil
+}
+
+// GetByCanonicalSymbol retrieves one instrument through the generated query method.
+//
+// The database UNIQUE constraint guarantees that the canonical-symbol query
+// returns at most one row. If PostgreSQL returns no row, the generated method
+// returns pgx.ErrNoRows, which is wrapped here for caller-friendly context.
+func (r *InstrumentRepository) GetByCanonicalSymbol(ctx context.Context, canonicalSymbol string) (Instrument, error) {
+	// The generated method owns the SQL execution and row scanning. This wrapper
+	// only supplies the context and canonical symbol, then maps the result.
+	row, err := r.queries.GetInstrumentByCanonicalSymbol(ctx, canonicalSymbol)
+	if err != nil {
+		return Instrument{}, fmt.Errorf("get instrument %q: %w", canonicalSymbol, err)
+	}
+
+	return instrumentFromGenerated(row.ID, row.CanonicalSymbol, row.Name, row.AssetType, row.Exchange, row.Currency, row.IsActive, row.Metadata), nil
+}
+
+// instrumentFromGenerated translates nullable sqlc text into the application model.
+// Keeping this conversion in one helper prevents Create and Get from duplicating
+// the same pgtype.Text handling logic.
+func instrumentFromGenerated(
+	id int64,
+	canonicalSymbol string,
+	name string,
+	assetType string,
+	exchange pgtype.Text,
+	currency string,
+	isActive bool,
+	metadata []byte,
+) Instrument {
+	var exchangeValue *string
+	if exchange.Valid {
+		value := exchange.String
+		exchangeValue = &value
+	}
+
+	return Instrument{
+		ID:              id,
+		CanonicalSymbol: canonicalSymbol,
+		Name:            name,
+		AssetType:       assetType,
+		Exchange:        exchangeValue,
+		Currency:        currency,
+		IsActive:        isActive,
+		Metadata:        metadata,
+	}
+}

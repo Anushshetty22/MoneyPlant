@@ -1,0 +1,21 @@
+# Phase 3.3 update: sqlc configuration was added to generate type-safe Go
+# database code from the SQL schema and query files.
+version: "2"
+
+sql:
+  - engine: "postgresql"
+    # Query files contain the SQL operations that the Go application may call.
+    queries: "db/query"
+    # Reuse the PostgreSQL migrations as the schema source for sqlc's analysis.
+    # sqlc reads the table definitions but does not execute these migrations.
+    schema: "../db/migrations"
+    gen:
+      go:
+        # Generated methods will belong to this Go package.
+        package: "generated"
+        # Generated files are kept separate from handwritten application code.
+        out: "internal/database/generated"
+        # Use pgx/v5 types and interfaces because the project already uses pgxpool.
+        sql_package: "pgx/v5"
+        # Include JSON tags so generated structs can later be returned by the API.
+        emit_json_tags: true
