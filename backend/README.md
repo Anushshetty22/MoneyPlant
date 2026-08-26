@@ -19,3 +19,17 @@ The `--to` timestamp is exclusive. The command resolves `BTCUSDT` through the
 canonical `instruments` table, finds its active Binance mapping in
 `instrument_sources`, downloads klines, and records the batch in
 `market_candles` and `ingestion_runs`.
+
+For the NSE EOD fallback, use the canonical symbol `SBIN`. The command resolves
+its provider-specific `SBIN.NS` mapping automatically:
+
+```bash
+go run ./cmd/ingest-yahoo \
+  --symbol SBIN \
+  --interval 1d \
+  --from 2026-08-01T00:00:00Z \
+  --to 2026-08-07T00:00:00Z
+```
+
+Yahoo ingestion stores unadjusted OHLCV values. Binance-specific fields such as
+quote volume, trade count, and taker-buy volume remain NULL for these rows.

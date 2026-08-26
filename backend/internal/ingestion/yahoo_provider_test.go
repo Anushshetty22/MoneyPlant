@@ -109,6 +109,65 @@ func TestYahooMarketDataProviderRejectsIntradayInterval(t *testing.T) {
 	}
 }
 
+// TestYahooMarketDataProviderFailsOverAfterRateLimit verifies controlled
+// retry/failover behavior without making any public Yahoo Finance requests.
+//
+// Phase 4.4 update: the first local endpoint returns HTTP 429 twice with an
+// immediate Retry-After value, then the second endpoint returns a valid chart.
+func TestYahooMarketDataProviderFailsOverAfterRateLimit(t *testing.T) {
+	var primaryCalls int
+	primary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		primaryCalls++
+		w.Header().Set("Retry-After", "0")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte("Edge: Too Many Requests"))
+	}))
+	defer primary.Close()
+
+	secondary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"chart": {
+				"result": [{
+					"timestamp": [1785815100],
+					"indicators": {"quote": [{
+						"open": [1043], "high": [1055], "low": [1040.3],
+						"close": [1055], "volume": [8707119]
+					}]}
+				}],
+				"error": null
+			}
+		}`))
+	}))
+	defer secondary.Close()
+
+	provider, err := ingestion.NewYahooMarketDataProviderWithFallbacks(
+		primary.Client(),
+		primary.URL,
+		secondary.URL,
+	)
+	if err != nil {
+		t.Fatalf("create Yahoo provider: %v", err)
+	}
+
+	from := time.Unix(1785815100, 0).UTC()
+	candles, err := provider.FetchHistoricalCandles(context.Background(), ingestion.HistoricalCandleRequest{
+		ProviderSymbol: "SBIN.NS",
+		Interval:       "1d",
+		From:           yahooTimestamp(from),
+		To:             yahooTimestamp(from.Add(24 * time.Hour)),
+	})
+	if err != nil {
+		t.Fatalf("fetch Yahoo candles through fallback: %v", err)
+	}
+	if primaryCalls != 2 {
+		t.Fatalf("primary calls = %d, want one initial request plus one retry", primaryCalls)
+	}
+	if len(candles) != 1 {
+		t.Fatalf("candles = %d, want 1 from fallback endpoint", len(candles))
+	}
+}
+
 // yahooTimestamp keeps request construction readable while producing the exact
 // pgtype representation expected by HistoricalCandleRequest.
 func yahooTimestamp(value time.Time) pgtype.Timestamptz {

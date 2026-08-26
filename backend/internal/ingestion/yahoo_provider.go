@@ -6,6 +6,8 @@ import (
 	"context"
 	// encoding/json decodes Yahoo Finance's nested chart response.
 	"encoding/json"
+	// errors lets the fallback loop inspect a typed HTTP rate-limit error.
+	"errors"
 	// fmt creates errors that identify malformed chart data or failed requests.
 	"fmt"
 	// io reads the response body and limits error-body output.
@@ -29,9 +31,19 @@ const (
 	// YahooFinanceChartBaseURL is the chart endpoint selected for the NSE EOD
 	// fallback in the Phase 1 data-source decision.
 	YahooFinanceChartBaseURL = "https://query1.finance.yahoo.com"
+	// YahooFinanceFallbackBaseURL is tried when the primary Yahoo host is
+	// rate-limited. Both hosts expose the same chart API contract.
+	YahooFinanceFallbackBaseURL = "https://query2.finance.yahoo.com"
 
 	// yahooRequestTimeout prevents a provider request from waiting indefinitely.
 	yahooRequestTimeout = 10 * time.Second
+	// yahooRateLimitRetries limits repeated attempts against one rate-limited host.
+	yahooRateLimitRetries = 1
+	// yahooDefaultRetryDelay is used when Yahoo omits Retry-After.
+	yahooDefaultRetryDelay = 2 * time.Second
+	// yahooMaximumRetryDelay prevents an unreasonable provider header from
+	// blocking the entire ingestion command for a long time.
+	yahooMaximumRetryDelay = 30 * time.Second
 )
 
 // YahooMarketDataProvider fetches unadjusted historical EOD candles from Yahoo Finance.
@@ -41,8 +53,8 @@ const (
 // interface as Binance, allowing the pipeline to preserve the source identity
 // without changing its normalized candle model.
 type YahooMarketDataProvider struct {
-	client  *http.Client
-	baseURL string
+	client   *http.Client
+	baseURLs []string
 }
 
 // NewYahooMarketDataProvider creates a Yahoo Finance chart adapter.
@@ -51,20 +63,45 @@ type YahooMarketDataProvider struct {
 // receives a bounded default timeout, while a custom base URL lets tests use a
 // local httptest server instead of contacting Yahoo Finance.
 func NewYahooMarketDataProvider(client *http.Client, baseURL string) (*YahooMarketDataProvider, error) {
+	baseURLs := []string{baseURL}
+	// Phase 4.4 update: the production default now includes a second Yahoo host.
+	// Custom URLs remain single-endpoint so offline tests and local compatible
+	// services are not unexpectedly contacted through the public internet.
+	if strings.TrimRight(strings.TrimSpace(baseURL), "/") == YahooFinanceChartBaseURL {
+		baseURLs = append(baseURLs, YahooFinanceFallbackBaseURL)
+	}
+	return NewYahooMarketDataProviderWithFallbacks(client, baseURLs...)
+}
+
+// NewYahooMarketDataProviderWithFallbacks creates a Yahoo adapter from an
+// ordered list of endpoints. The first endpoint is primary; later endpoints are
+// tried only after a rate-limit response exhausts retries for the earlier one.
+//
+// Phase 4.4 update: this constructor makes failover behavior testable with two
+// local HTTP servers and keeps endpoint selection explicit for future deployment
+// configuration.
+func NewYahooMarketDataProviderWithFallbacks(client *http.Client, baseURLs ...string) (*YahooMarketDataProvider, error) {
 	if client == nil {
 		client = &http.Client{Timeout: yahooRequestTimeout}
 	}
-
-	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
-	parsedURL, err := url.Parse(baseURL)
-	if err != nil || parsedURL.Scheme == "" || parsedURL.Host == "" {
-		return nil, fmt.Errorf("invalid Yahoo Finance base URL %q", baseURL)
-	}
-	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
-		return nil, fmt.Errorf("Yahoo Finance base URL must use http or https, got %q", parsedURL.Scheme)
+	if len(baseURLs) == 0 {
+		return nil, fmt.Errorf("at least one Yahoo Finance base URL is required")
 	}
 
-	return &YahooMarketDataProvider{client: client, baseURL: baseURL}, nil
+	cleanURLs := make([]string, 0, len(baseURLs))
+	for _, baseURL := range baseURLs {
+		baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+		parsedURL, err := url.Parse(baseURL)
+		if err != nil || parsedURL.Scheme == "" || parsedURL.Host == "" {
+			return nil, fmt.Errorf("invalid Yahoo Finance base URL %q", baseURL)
+		}
+		if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+			return nil, fmt.Errorf("Yahoo Finance base URL must use http or https, got %q", parsedURL.Scheme)
+		}
+		cleanURLs = append(cleanURLs, baseURL)
+	}
+
+	return &YahooMarketDataProvider{client: client, baseURLs: cleanURLs}, nil
 }
 
 // ProviderName identifies Yahoo Finance in ingestion provenance and audit rows.
@@ -149,7 +186,36 @@ type yahooQuote struct {
 
 // fetchChart builds one Yahoo chart request and decodes its JSON response.
 func (p *YahooMarketDataProvider) fetchChart(ctx context.Context, request HistoricalCandleRequest) (yahooChartResponse, error) {
-	endpoint, err := url.Parse(p.baseURL + "/v8/finance/chart/" + url.PathEscape(request.ProviderSymbol))
+	var lastErr error
+	for _, baseURL := range p.baseURLs {
+		for attempt := 0; attempt <= yahooRateLimitRetries; attempt++ {
+			chart, err := p.fetchChartFromBase(ctx, baseURL, request)
+			if err == nil {
+				return chart, nil
+			}
+			lastErr = err
+
+			var rateLimitErr *yahooHTTPError
+			if !errors.As(err, &rateLimitErr) || rateLimitErr.statusCode != http.StatusTooManyRequests {
+				return yahooChartResponse{}, err
+			}
+			if attempt == yahooRateLimitRetries {
+				break
+			}
+
+			if err := waitForYahooRetry(ctx, rateLimitErr.retryAfter); err != nil {
+				return yahooChartResponse{}, err
+			}
+		}
+	}
+
+	return yahooChartResponse{}, fmt.Errorf("all Yahoo Finance chart endpoints failed: %w", lastErr)
+}
+
+// fetchChartFromBase performs one request to one specific Yahoo host. Keeping
+// this operation separate lets fetchChart decide whether to retry or fail over.
+func (p *YahooMarketDataProvider) fetchChartFromBase(ctx context.Context, baseURL string, request HistoricalCandleRequest) (yahooChartResponse, error) {
+	endpoint, err := url.Parse(baseURL + "/v8/finance/chart/" + url.PathEscape(request.ProviderSymbol))
 	if err != nil {
 		return yahooChartResponse{}, fmt.Errorf("build Yahoo chart URL: %w", err)
 	}
@@ -167,6 +233,9 @@ func (p *YahooMarketDataProvider) fetchChart(ctx context.Context, request Histor
 		return yahooChartResponse{}, fmt.Errorf("create Yahoo chart request: %w", err)
 	}
 	requestMessage.Header.Set("Accept", "application/json")
+	// A descriptive user agent helps the provider identify the application and
+	// makes requests less likely to look like anonymous malformed traffic.
+	requestMessage.Header.Set("User-Agent", "MoneyPlant/0.1 (local learning project)")
 
 	response, err := p.client.Do(requestMessage)
 	if err != nil {
@@ -179,7 +248,12 @@ func (p *YahooMarketDataProvider) fetchChart(ctx context.Context, request Histor
 		if readErr != nil {
 			return yahooChartResponse{}, fmt.Errorf("Yahoo chart returned HTTP %d and error body could not be read: %w", response.StatusCode, readErr)
 		}
-		return yahooChartResponse{}, fmt.Errorf("Yahoo chart returned HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(body)))
+		return yahooChartResponse{}, &yahooHTTPError{
+			statusCode: response.StatusCode,
+			endpoint:   baseURL,
+			retryAfter: parseYahooRetryAfter(response.Header.Get("Retry-After")),
+			message:    strings.TrimSpace(string(body)),
+		}
 	}
 
 	var chart yahooChartResponse
@@ -190,6 +264,63 @@ func (p *YahooMarketDataProvider) fetchChart(ctx context.Context, request Histor
 		return yahooChartResponse{}, fmt.Errorf("Yahoo chart returned provider error: %s", string(chart.Chart.Error))
 	}
 	return chart, nil
+}
+
+// yahooHTTPError preserves the response status and retry timing so the caller
+// can distinguish a rate limit from a permanent 4xx/5xx provider error.
+type yahooHTTPError struct {
+	statusCode int
+	endpoint   string
+	retryAfter time.Duration
+	message    string
+}
+
+func (e *yahooHTTPError) Error() string {
+	return fmt.Sprintf("Yahoo chart endpoint %s returned HTTP %d: %s", e.endpoint, e.statusCode, e.message)
+}
+
+// parseYahooRetryAfter supports the standard integer-seconds form and the
+// HTTP-date form. A missing or malformed header returns -1 as an internal
+// sentinel, which tells the retry loop to use its short bounded default delay.
+// A valid zero-second header remains zero so tests and providers can request an
+// immediate retry explicitly.
+func parseYahooRetryAfter(header string) time.Duration {
+	header = strings.TrimSpace(header)
+	if header == "" {
+		return -1
+	}
+	if seconds, err := strconv.Atoi(header); err == nil {
+		if seconds < 0 {
+			return 0
+		}
+		return time.Duration(seconds) * time.Second
+	}
+	if retryAt, err := http.ParseTime(header); err == nil {
+		if delay := time.Until(retryAt); delay > 0 {
+			return delay
+		}
+	}
+	return -1
+}
+
+// waitForYahooRetry sleeps only as long as the provider requests, applying
+// defaults and a maximum so rate-limit handling remains bounded and cancellable.
+func waitForYahooRetry(ctx context.Context, retryAfter time.Duration) error {
+	if retryAfter < 0 {
+		retryAfter = yahooDefaultRetryDelay
+	}
+	if retryAfter > yahooMaximumRetryDelay {
+		retryAfter = yahooMaximumRetryDelay
+	}
+
+	timer := time.NewTimer(retryAfter)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 // normalizeYahooQuote converts one parallel Yahoo quote position into the
