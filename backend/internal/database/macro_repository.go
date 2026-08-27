@@ -3,10 +3,13 @@ package database
 import (
 	// context carries cancellation and deadlines into generated database queries.
 	"context"
+	// errors lets the upsert distinguish an expected no-row insert conflict from a real database error.
+	"errors"
 	// fmt adds the operation and dataset code to returned errors.
 	"fmt"
 
 	"github.com/Anushshetty22/MoneyPlant/backend/internal/database/generated"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -46,6 +49,16 @@ type MacroObservation struct {
 	SourceRetrievedAt  pgtype.Timestamptz
 	SourceRowReference *string
 	Metadata           []byte
+}
+
+// MacroObservationWrite reports the stored observation and whether the upsert
+// inserted a new row or updated an existing dataset/date row.
+//
+// Phase 4.5 update: this result was added so ingestion_runs can distinguish new
+// observations from refreshed values during a safe CSV reseed.
+type MacroObservationWrite struct {
+	Observation MacroObservation
+	Inserted    bool
 }
 
 // MacroDatasetRepository wraps generated dataset-definition queries.
@@ -225,6 +238,82 @@ func (r *MacroObservationRepository) Create(
 		row.SourceRowReference,
 		row.Metadata,
 	), nil
+}
+
+// Upsert inserts a new observation or refreshes the existing dataset/date row.
+//
+// The first generated query uses ON CONFLICT DO NOTHING. If it returns pgx.ErrNoRows,
+// that means the unique key already existed, so the second generated query updates
+// the existing row. This avoids duplicate observations while preserving an explicit
+// inserted-versus-updated result for the ingestion audit.
+func (r *MacroObservationRepository) Upsert(
+	ctx context.Context,
+	macroDatasetID int64,
+	observedOn pgtype.Date,
+	value pgtype.Numeric,
+	sourceRetrievedAt pgtype.Timestamptz,
+	sourceRowReference *string,
+	metadata []byte,
+) (MacroObservationWrite, error) {
+	// Convert the optional source reference into SQL NULL or text for both query paths.
+	sourceReferenceValue := pgtype.Text{}
+	if sourceRowReference != nil {
+		sourceReferenceValue = pgtype.Text{String: *sourceRowReference, Valid: true}
+	}
+
+	// The insert query returns a row only when the dataset/date key did not exist.
+	insertedRow, err := r.queries.InsertMacroObservationIfAbsent(ctx, generated.InsertMacroObservationIfAbsentParams{
+		MacroDatasetID:     macroDatasetID,
+		ObservedOn:         observedOn,
+		Value:              value,
+		SourceRetrievedAt:  sourceRetrievedAt,
+		SourceRowReference: sourceReferenceValue,
+		Metadata:           metadata,
+	})
+	if err == nil {
+		return MacroObservationWrite{
+			Observation: macroObservationFromGenerated(
+				insertedRow.ID,
+				insertedRow.MacroDatasetID,
+				insertedRow.ObservedOn,
+				insertedRow.Value,
+				insertedRow.SourceRetrievedAt,
+				insertedRow.SourceRowReference,
+				insertedRow.Metadata,
+			),
+			Inserted: true,
+		}, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return MacroObservationWrite{}, fmt.Errorf("insert macro observation for dataset %d: %w", macroDatasetID, err)
+	}
+
+	// No row from the insert means the unique key already exists. Update the
+	// existing observation with the latest source value and provenance.
+	updatedRow, err := r.queries.UpdateMacroObservation(ctx, generated.UpdateMacroObservationParams{
+		MacroDatasetID:     macroDatasetID,
+		ObservedOn:         observedOn,
+		Value:              value,
+		SourceRetrievedAt:  sourceRetrievedAt,
+		SourceRowReference: sourceReferenceValue,
+		Metadata:           metadata,
+	})
+	if err != nil {
+		return MacroObservationWrite{}, fmt.Errorf("update macro observation for dataset %d: %w", macroDatasetID, err)
+	}
+
+	return MacroObservationWrite{
+		Observation: macroObservationFromGenerated(
+			updatedRow.ID,
+			updatedRow.MacroDatasetID,
+			updatedRow.ObservedOn,
+			updatedRow.Value,
+			updatedRow.SourceRetrievedAt,
+			updatedRow.SourceRowReference,
+			updatedRow.Metadata,
+		),
+		Inserted: false,
+	}, nil
 }
 
 // ListByDatasetCode returns observations in chronological order for one dataset.

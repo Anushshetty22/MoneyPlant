@@ -85,8 +85,10 @@ type MacroDatasetRepository interface {
 }
 
 // MacroObservationRepository defines persistence operations for normalized macro values.
+// Phase 4.5 update: Upsert was added so reseeding refreshes an existing date
+// instead of failing on the macro_observations unique constraint.
 type MacroObservationRepository interface {
-	Create(context.Context, int64, pgtype.Date, pgtype.Numeric, pgtype.Timestamptz, *string, []byte) (database.MacroObservation, error)
+	Upsert(context.Context, int64, pgtype.Date, pgtype.Numeric, pgtype.Timestamptz, *string, []byte) (database.MacroObservationWrite, error)
 	ListByDatasetCode(context.Context, string) ([]database.MacroObservation, error)
 }
 
