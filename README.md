@@ -14,6 +14,17 @@ We are starting with Phase 0 and Phase 1:
 
 The project is intentionally being implemented incrementally. Each sub-phase should produce a testable result and a short learning checkpoint.
 
+## Current progress
+
+- Database schema and initial definitions are working locally.
+- Binance real candle ingestion is working.
+- Yahoo Finance NSE EOD fallback ingestion is working.
+- CPI and RBI repo-rate CSV seeding is working with learning fixtures.
+- Angel One integration is deferred until API setup is available.
+
+See [`docs/ingestion-runbook.md`](docs/ingestion-runbook.md) for the complete
+Phase 1 workflow and verification commands.
+
 ## Repository layout
 
 ```text
@@ -44,4 +55,3 @@ Do not commit credentials or downloaded private data. Copy `.env.example` to `.e
 - `docs/architecture.md` - services and data flow
 - `docs/data-source-decision.md` - source-research template and decisions
 - `docs/learning-notes.md` - concepts, commands, and problems encountered
-

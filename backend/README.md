@@ -50,3 +50,7 @@ go run ./cmd/seed-macro \
 
 Each command resolves the dataset definition, validates the CSV, upserts
 observations by dataset and date, and records a `macro_seed` ingestion run.
+
+For the complete Phase 1 execution order, verification queries, repeat-run
+behavior, and troubleshooting guidance, see
+[`docs/ingestion-runbook.md`](../docs/ingestion-runbook.md).
