@@ -110,11 +110,29 @@ func TestMarketIngestionServicePartialFailure(t *testing.T) {
 // fixtureCandle creates the smallest valid input needed to test the pipeline's
 // provider filtering and instrument-source assignment behavior.
 func fixtureCandle(observedAt time.Time) database.MarketCandleInput {
+	// Phase 5.1 update: fixtures now include a valid OHLCV shape because the
+	// pipeline validates rows before sending them to the repository.
 	return database.MarketCandleInput{
-		Interval:          "1d",
-		ObservedAt:        timestamp(observedAt),
-		SourceRetrievedAt: timestamp(observedAt.Add(time.Hour)),
+		InstrumentSourceID: 1,
+		Interval:           "1d",
+		ObservedAt:         timestamp(observedAt),
+		Open:               numeric("100"),
+		High:               numeric("105"),
+		Low:                numeric("95"),
+		Close:              numeric("102"),
+		Volume:             numeric("1000"),
+		SourceRetrievedAt:  timestamp(observedAt.Add(time.Hour)),
 	}
+}
+
+// numeric converts an exact decimal test value into the pgtype model used by
+// the database layer without routing it through float64.
+func numeric(value string) pgtype.Numeric {
+	var numericValue pgtype.Numeric
+	if err := numericValue.Scan(value); err != nil {
+		panic(err)
+	}
+	return numericValue
 }
 
 // timestamp converts a time.Time into the pgtype representation used by the

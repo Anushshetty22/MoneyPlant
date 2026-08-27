@@ -104,6 +104,18 @@ func (s *MarketIngestionService) IngestHistorical(
 		// resolved database mapping that identifies the exact source used.
 		candle.InstrumentSourceID = instrumentSourceID
 
+		// Phase 5.1 update: validate normalized provider data before persistence.
+		// This produces a provider-independent quality error and prevents invalid
+		// rows from reaching the database repository.
+		if err := ValidateMarketCandle(candle); err != nil {
+			errorMessage := err.Error()
+			if _, completeErr := s.runTracker.Complete(ctx, run.ID, "partial", completionTimestamp(), result.RowsReceived, result.RowsInserted, result.RowsUpdated, result.RowsRejected+1, &errorMessage); completeErr != nil {
+				return result, fmt.Errorf("validate market candle: %v; complete partial run: %w", err, completeErr)
+			}
+			result.RowsRejected++
+			return result, fmt.Errorf("validate market candle: %w", err)
+		}
+
 		if _, err := s.candleStore.Create(ctx, candle); err != nil {
 			errorMessage := err.Error()
 			if _, completeErr := s.runTracker.Complete(ctx, run.ID, "partial", completionTimestamp(), result.RowsReceived, result.RowsInserted, result.RowsUpdated, result.RowsRejected+1, &errorMessage); completeErr != nil {
