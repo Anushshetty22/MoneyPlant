@@ -33,3 +33,20 @@ go run ./cmd/ingest-yahoo \
 
 Yahoo ingestion stores unadjusted OHLCV values. Binance-specific fields such as
 quote volume, trade count, and taker-buy volume remain NULL for these rows.
+
+## Phase 4.5 macro CSV seeding
+
+Run the sample CPI and repo-rate files independently:
+
+```bash
+go run ./cmd/seed-macro \
+  --dataset rbi_cpi_combined_yoy \
+  --file ../data/seeds/rbi_cpi_combined_yoy.sample.csv
+
+go run ./cmd/seed-macro \
+  --dataset rbi_policy_repo_rate \
+  --file ../data/seeds/rbi_policy_repo_rate.sample.csv
+```
+
+Each command resolves the dataset definition, validates the CSV, upserts
+observations by dataset and date, and records a `macro_seed` ingestion run.
