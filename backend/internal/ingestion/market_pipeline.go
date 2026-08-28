@@ -119,7 +119,8 @@ func (s *MarketIngestionService) IngestHistorical(
 			return result, fmt.Errorf("validate market candle: %w", err)
 		}
 
-		if _, err := s.candleStore.Create(ctx, candle); err != nil {
+		writeResult, err := s.candleStore.Upsert(ctx, candle)
+		if err != nil {
 			errorMessage := err.Error()
 			if _, completeErr := completeIngestionRun(ctx, s.runTracker, run.ID, "partial", completionTimestamp(), result.RowsReceived, result.RowsInserted, result.RowsUpdated, result.RowsRejected+1, &errorMessage); completeErr != nil {
 				return result, fmt.Errorf("persist candle: %v; complete partial run: %w", err, completeErr)
@@ -128,10 +129,13 @@ func (s *MarketIngestionService) IngestHistorical(
 			return result, fmt.Errorf("persist market candle: %w", err)
 		}
 
-		// The current repository Create method performs an insert. Upsert/update
-		// counting will be refined when the ingestion repository gains explicit
-		// upsert result reporting.
-		result.RowsInserted++
+		// Phase 5.4 update: count the repository's explicit write result so audit
+		// history distinguishes first-time candles from refreshed candles.
+		if writeResult.Inserted {
+			result.RowsInserted++
+		} else {
+			result.RowsUpdated++
+		}
 	}
 
 	// Mark the run successful after every candle has been persisted.

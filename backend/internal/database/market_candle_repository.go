@@ -3,10 +3,13 @@ package database
 import (
 	// context carries cancellation and deadlines into generated database queries.
 	"context"
+	// errors identifies the expected no-row result from INSERT ... DO NOTHING.
+	"errors"
 	// fmt adds operation details to returned errors.
 	"fmt"
 
 	"github.com/Anushshetty22/MoneyPlant/backend/internal/database/generated"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -32,6 +35,16 @@ type MarketCandleInput struct {
 	TakerBuyVolume      pgtype.Numeric
 	TakerBuyQuoteVolume pgtype.Numeric
 	SourceRetrievedAt   pgtype.Timestamptz
+}
+
+// MarketCandleWrite reports the stored candle and whether the natural key was
+// inserted for the first time or refreshed through the update path.
+//
+// Phase 5.4 update: this result was added so ingestion_runs can distinguish new
+// market rows from candles received again during a later provider window.
+type MarketCandleWrite struct {
+	Candle   MarketCandle
+	Inserted bool
 }
 
 // MarketCandle represents one normalized OHLCV observation returned by the repository.
@@ -119,6 +132,97 @@ func (r *MarketCandleRepository) Create(ctx context.Context, input MarketCandleI
 		row.TakerBuyQuoteVolume,
 		row.SourceRetrievedAt,
 	), nil
+}
+
+// Upsert inserts a new candle or updates the existing source/interval/open-time
+// row. This makes repeated historical ingestion safe and preserves the newest
+// source retrieval timestamp and provider metrics.
+func (r *MarketCandleRepository) Upsert(ctx context.Context, input MarketCandleInput) (MarketCandleWrite, error) {
+	// The generated insert query returns a row only when the natural key is new.
+	insertedRow, err := r.queries.InsertMarketCandleIfAbsent(ctx, generated.InsertMarketCandleIfAbsentParams{
+		InstrumentSourceID:  input.InstrumentSourceID,
+		Interval:            input.Interval,
+		ObservedAt:          input.ObservedAt,
+		SourceCloseAt:       input.SourceCloseAt,
+		Open:                input.Open,
+		High:                input.High,
+		Low:                 input.Low,
+		Close:               input.Close,
+		Volume:              input.Volume,
+		QuoteVolume:         input.QuoteVolume,
+		TradeCount:          input.TradeCount,
+		TakerBuyVolume:      input.TakerBuyVolume,
+		TakerBuyQuoteVolume: input.TakerBuyQuoteVolume,
+		SourceRetrievedAt:   input.SourceRetrievedAt,
+	})
+	if err == nil {
+		return MarketCandleWrite{
+			Candle: marketCandleFromGenerated(
+				insertedRow.ID,
+				insertedRow.InstrumentSourceID,
+				insertedRow.Interval,
+				insertedRow.ObservedAt,
+				insertedRow.SourceCloseAt,
+				insertedRow.Open,
+				insertedRow.High,
+				insertedRow.Low,
+				insertedRow.Close,
+				insertedRow.Volume,
+				insertedRow.QuoteVolume,
+				insertedRow.TradeCount,
+				insertedRow.TakerBuyVolume,
+				insertedRow.TakerBuyQuoteVolume,
+				insertedRow.SourceRetrievedAt,
+			),
+			Inserted: true,
+		}, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return MarketCandleWrite{}, fmt.Errorf("insert market candle for source %d: %w", input.InstrumentSourceID, err)
+	}
+
+	// A no-row insert means the natural key already exists. Update the source
+	// values so a later provider correction is reflected in the warehouse.
+	updatedRow, err := r.queries.UpdateMarketCandle(ctx, generated.UpdateMarketCandleParams{
+		InstrumentSourceID:  input.InstrumentSourceID,
+		Interval:            input.Interval,
+		ObservedAt:          input.ObservedAt,
+		SourceCloseAt:       input.SourceCloseAt,
+		Open:                input.Open,
+		High:                input.High,
+		Low:                 input.Low,
+		Close:               input.Close,
+		Volume:              input.Volume,
+		QuoteVolume:         input.QuoteVolume,
+		TradeCount:          input.TradeCount,
+		TakerBuyVolume:      input.TakerBuyVolume,
+		TakerBuyQuoteVolume: input.TakerBuyQuoteVolume,
+		SourceRetrievedAt:   input.SourceRetrievedAt,
+	})
+	if err != nil {
+		return MarketCandleWrite{}, fmt.Errorf("update market candle for source %d: %w", input.InstrumentSourceID, err)
+	}
+
+	return MarketCandleWrite{
+		Candle: marketCandleFromGenerated(
+			updatedRow.ID,
+			updatedRow.InstrumentSourceID,
+			updatedRow.Interval,
+			updatedRow.ObservedAt,
+			updatedRow.SourceCloseAt,
+			updatedRow.Open,
+			updatedRow.High,
+			updatedRow.Low,
+			updatedRow.Close,
+			updatedRow.Volume,
+			updatedRow.QuoteVolume,
+			updatedRow.TradeCount,
+			updatedRow.TakerBuyVolume,
+			updatedRow.TakerBuyQuoteVolume,
+			updatedRow.SourceRetrievedAt,
+		),
+		Inserted: false,
+	}, nil
 }
 
 // ListByCanonicalSymbol returns candles for one provider and interval in a UTC time range.

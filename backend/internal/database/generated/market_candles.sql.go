@@ -12,7 +12,6 @@ import (
 )
 
 const createMarketCandle = `-- name: CreateMarketCandle :one
-
 INSERT INTO market_candles (
     instrument_source_id,
     interval,
@@ -85,8 +84,6 @@ type CreateMarketCandleRow struct {
 	SourceRetrievedAt   pgtype.Timestamptz `json:"source_retrieved_at"`
 }
 
-// Phase 3.3 update: market-candle queries were added so the ingestion and API
-// layers can write and read normalized OHLCV observations through sqlc.
 // Inserts one candle and returns the stored row. The database constraints validate
 // OHLCV relationships, non-negative metrics, timestamps, and duplicate protection.
 func (q *Queries) CreateMarketCandle(ctx context.Context, arg CreateMarketCandleParams) (CreateMarketCandleRow, error) {
@@ -107,6 +104,127 @@ func (q *Queries) CreateMarketCandle(ctx context.Context, arg CreateMarketCandle
 		arg.SourceRetrievedAt,
 	)
 	var i CreateMarketCandleRow
+	err := row.Scan(
+		&i.ID,
+		&i.InstrumentSourceID,
+		&i.Interval,
+		&i.ObservedAt,
+		&i.SourceCloseAt,
+		&i.Open,
+		&i.High,
+		&i.Low,
+		&i.Close,
+		&i.Volume,
+		&i.QuoteVolume,
+		&i.TradeCount,
+		&i.TakerBuyVolume,
+		&i.TakerBuyQuoteVolume,
+		&i.SourceRetrievedAt,
+	)
+	return i, err
+}
+
+const insertMarketCandleIfAbsent = `-- name: InsertMarketCandleIfAbsent :one
+
+
+INSERT INTO market_candles (
+    instrument_source_id,
+    interval,
+    observed_at,
+    source_close_at,
+    open,
+    high,
+    low,
+    close,
+    volume,
+    quote_volume,
+    trade_count,
+    taker_buy_volume,
+    taker_buy_quote_volume,
+    source_retrieved_at
+)
+VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+)
+ON CONFLICT (instrument_source_id, interval, observed_at) DO NOTHING
+RETURNING
+    id,
+    instrument_source_id,
+    interval,
+    observed_at,
+    source_close_at,
+    open,
+    high,
+    low,
+    close,
+    volume,
+    quote_volume,
+    trade_count,
+    taker_buy_volume,
+    taker_buy_quote_volume,
+    source_retrieved_at
+`
+
+type InsertMarketCandleIfAbsentParams struct {
+	InstrumentSourceID  int64              `json:"instrument_source_id"`
+	Interval            string             `json:"interval"`
+	ObservedAt          pgtype.Timestamptz `json:"observed_at"`
+	SourceCloseAt       pgtype.Timestamptz `json:"source_close_at"`
+	Open                pgtype.Numeric     `json:"open"`
+	High                pgtype.Numeric     `json:"high"`
+	Low                 pgtype.Numeric     `json:"low"`
+	Close               pgtype.Numeric     `json:"close"`
+	Volume              pgtype.Numeric     `json:"volume"`
+	QuoteVolume         pgtype.Numeric     `json:"quote_volume"`
+	TradeCount          pgtype.Int8        `json:"trade_count"`
+	TakerBuyVolume      pgtype.Numeric     `json:"taker_buy_volume"`
+	TakerBuyQuoteVolume pgtype.Numeric     `json:"taker_buy_quote_volume"`
+	SourceRetrievedAt   pgtype.Timestamptz `json:"source_retrieved_at"`
+}
+
+type InsertMarketCandleIfAbsentRow struct {
+	ID                  int64              `json:"id"`
+	InstrumentSourceID  int64              `json:"instrument_source_id"`
+	Interval            string             `json:"interval"`
+	ObservedAt          pgtype.Timestamptz `json:"observed_at"`
+	SourceCloseAt       pgtype.Timestamptz `json:"source_close_at"`
+	Open                pgtype.Numeric     `json:"open"`
+	High                pgtype.Numeric     `json:"high"`
+	Low                 pgtype.Numeric     `json:"low"`
+	Close               pgtype.Numeric     `json:"close"`
+	Volume              pgtype.Numeric     `json:"volume"`
+	QuoteVolume         pgtype.Numeric     `json:"quote_volume"`
+	TradeCount          pgtype.Int8        `json:"trade_count"`
+	TakerBuyVolume      pgtype.Numeric     `json:"taker_buy_volume"`
+	TakerBuyQuoteVolume pgtype.Numeric     `json:"taker_buy_quote_volume"`
+	SourceRetrievedAt   pgtype.Timestamptz `json:"source_retrieved_at"`
+}
+
+// Phase 3.3 update: market-candle queries were added so the ingestion and API
+// layers can write and read normalized OHLCV observations through sqlc.
+// Phase 5.4 update: idempotent insert/update queries were added so repeated
+// market-provider ingestion refreshes an existing candle instead of failing on
+// the observation unique constraint.
+// Inserts one candle only when its source/interval/open-time key is new. A
+// conflict returns no row, allowing the repository to execute the update path.
+func (q *Queries) InsertMarketCandleIfAbsent(ctx context.Context, arg InsertMarketCandleIfAbsentParams) (InsertMarketCandleIfAbsentRow, error) {
+	row := q.db.QueryRow(ctx, insertMarketCandleIfAbsent,
+		arg.InstrumentSourceID,
+		arg.Interval,
+		arg.ObservedAt,
+		arg.SourceCloseAt,
+		arg.Open,
+		arg.High,
+		arg.Low,
+		arg.Close,
+		arg.Volume,
+		arg.QuoteVolume,
+		arg.TradeCount,
+		arg.TakerBuyVolume,
+		arg.TakerBuyQuoteVolume,
+		arg.SourceRetrievedAt,
+	)
+	var i InsertMarketCandleIfAbsentRow
 	err := row.Scan(
 		&i.ID,
 		&i.InstrumentSourceID,
@@ -226,4 +344,114 @@ func (q *Queries) ListMarketCandlesByCanonicalSymbol(ctx context.Context, arg Li
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateMarketCandle = `-- name: UpdateMarketCandle :one
+UPDATE market_candles
+SET source_close_at = $4,
+    open = $5,
+    high = $6,
+    low = $7,
+    close = $8,
+    volume = $9,
+    quote_volume = $10,
+    trade_count = $11,
+    taker_buy_volume = $12,
+    taker_buy_quote_volume = $13,
+    source_retrieved_at = $14,
+    updated_at = NOW()
+WHERE instrument_source_id = $1
+  AND interval = $2
+  AND observed_at = $3
+RETURNING
+    id,
+    instrument_source_id,
+    interval,
+    observed_at,
+    source_close_at,
+    open,
+    high,
+    low,
+    close,
+    volume,
+    quote_volume,
+    trade_count,
+    taker_buy_volume,
+    taker_buy_quote_volume,
+    source_retrieved_at
+`
+
+type UpdateMarketCandleParams struct {
+	InstrumentSourceID  int64              `json:"instrument_source_id"`
+	Interval            string             `json:"interval"`
+	ObservedAt          pgtype.Timestamptz `json:"observed_at"`
+	SourceCloseAt       pgtype.Timestamptz `json:"source_close_at"`
+	Open                pgtype.Numeric     `json:"open"`
+	High                pgtype.Numeric     `json:"high"`
+	Low                 pgtype.Numeric     `json:"low"`
+	Close               pgtype.Numeric     `json:"close"`
+	Volume              pgtype.Numeric     `json:"volume"`
+	QuoteVolume         pgtype.Numeric     `json:"quote_volume"`
+	TradeCount          pgtype.Int8        `json:"trade_count"`
+	TakerBuyVolume      pgtype.Numeric     `json:"taker_buy_volume"`
+	TakerBuyQuoteVolume pgtype.Numeric     `json:"taker_buy_quote_volume"`
+	SourceRetrievedAt   pgtype.Timestamptz `json:"source_retrieved_at"`
+}
+
+type UpdateMarketCandleRow struct {
+	ID                  int64              `json:"id"`
+	InstrumentSourceID  int64              `json:"instrument_source_id"`
+	Interval            string             `json:"interval"`
+	ObservedAt          pgtype.Timestamptz `json:"observed_at"`
+	SourceCloseAt       pgtype.Timestamptz `json:"source_close_at"`
+	Open                pgtype.Numeric     `json:"open"`
+	High                pgtype.Numeric     `json:"high"`
+	Low                 pgtype.Numeric     `json:"low"`
+	Close               pgtype.Numeric     `json:"close"`
+	Volume              pgtype.Numeric     `json:"volume"`
+	QuoteVolume         pgtype.Numeric     `json:"quote_volume"`
+	TradeCount          pgtype.Int8        `json:"trade_count"`
+	TakerBuyVolume      pgtype.Numeric     `json:"taker_buy_volume"`
+	TakerBuyQuoteVolume pgtype.Numeric     `json:"taker_buy_quote_volume"`
+	SourceRetrievedAt   pgtype.Timestamptz `json:"source_retrieved_at"`
+}
+
+// Refreshes all source-supplied candle values for an existing natural key and
+// updates updated_at so the refresh is visible in the warehouse.
+func (q *Queries) UpdateMarketCandle(ctx context.Context, arg UpdateMarketCandleParams) (UpdateMarketCandleRow, error) {
+	row := q.db.QueryRow(ctx, updateMarketCandle,
+		arg.InstrumentSourceID,
+		arg.Interval,
+		arg.ObservedAt,
+		arg.SourceCloseAt,
+		arg.Open,
+		arg.High,
+		arg.Low,
+		arg.Close,
+		arg.Volume,
+		arg.QuoteVolume,
+		arg.TradeCount,
+		arg.TakerBuyVolume,
+		arg.TakerBuyQuoteVolume,
+		arg.SourceRetrievedAt,
+	)
+	var i UpdateMarketCandleRow
+	err := row.Scan(
+		&i.ID,
+		&i.InstrumentSourceID,
+		&i.Interval,
+		&i.ObservedAt,
+		&i.SourceCloseAt,
+		&i.Open,
+		&i.High,
+		&i.Low,
+		&i.Close,
+		&i.Volume,
+		&i.QuoteVolume,
+		&i.TradeCount,
+		&i.TakerBuyVolume,
+		&i.TakerBuyQuoteVolume,
+		&i.SourceRetrievedAt,
+	)
+	return i, err
 }

@@ -5,6 +5,8 @@ import (
 	"context"
 	// errors creates a deterministic fake persistence failure.
 	"errors"
+	// fmt builds the fake repository's natural-key identifier.
+	"fmt"
 	// testing provides test execution and assertions.
 	"testing"
 	// time creates deterministic candle and ingestion-run timestamps.
@@ -104,6 +106,45 @@ func TestMarketIngestionServicePartialFailure(t *testing.T) {
 	}
 	if runTracker.completed.RowsRejected != 1 {
 		t.Fatalf("completed rejected rows = %d, want 1", runTracker.completed.RowsRejected)
+	}
+}
+
+// TestMarketIngestionServiceCountsRepeatedCandlesAsUpdates verifies that a
+// second historical run is represented as updates rather than new inserts.
+//
+// Phase 5.4 update: this test covers the pipeline side of market-candle
+// idempotency and confirms the ingestion audit counters remain meaningful.
+func TestMarketIngestionServiceCountsRepeatedCandlesAsUpdates(t *testing.T) {
+	baseTime := time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC)
+	candles := []database.MarketCandleInput{fixtureCandle(baseTime)}
+	provider, err := ingestion.NewFixtureMarketDataProvider("fixture", candles)
+	if err != nil {
+		t.Fatalf("create fixture provider: %v", err)
+	}
+
+	candleStore := &fakeCandleRepository{}
+	runTracker := &fakeIngestionRunTracker{}
+	service := ingestion.NewMarketIngestionService(provider, candleStore, runTracker)
+	request := ingestion.HistoricalCandleRequest{
+		ProviderSymbol: "BTCUSDT",
+		Interval:       "1d",
+		From:           timestamp(baseTime),
+		To:             timestamp(baseTime.Add(24 * time.Hour)),
+	}
+
+	first, err := service.IngestHistorical(context.Background(), "BTCUSDT", 42, request)
+	if err != nil {
+		t.Fatalf("first market ingestion: %v", err)
+	}
+	second, err := service.IngestHistorical(context.Background(), "BTCUSDT", 42, request)
+	if err != nil {
+		t.Fatalf("second market ingestion: %v", err)
+	}
+	if first.RowsInserted != 1 || first.RowsUpdated != 0 {
+		t.Fatalf("first result = %#v, want one insert", first)
+	}
+	if second.RowsInserted != 0 || second.RowsUpdated != 1 {
+		t.Fatalf("second result = %#v, want one update", second)
 	}
 }
 
@@ -218,17 +259,27 @@ func timestamp(value time.Time) pgtype.Timestamptz {
 
 type fakeCandleRepository struct {
 	created    []database.MarketCandleInput
+	stored     map[string]struct{}
 	failOnCall int
 	calls      int
 }
 
-func (f *fakeCandleRepository) Create(_ context.Context, input database.MarketCandleInput) (database.MarketCandle, error) {
+func (f *fakeCandleRepository) Upsert(_ context.Context, input database.MarketCandleInput) (database.MarketCandleWrite, error) {
 	f.calls++
 	if f.failOnCall != 0 && f.calls == f.failOnCall {
-		return database.MarketCandle{}, errors.New("simulated candle persistence failure")
+		return database.MarketCandleWrite{}, errors.New("simulated candle persistence failure")
 	}
+	if f.stored == nil {
+		f.stored = make(map[string]struct{})
+	}
+	key := fmt.Sprintf("%d:%s:%s", input.InstrumentSourceID, input.Interval, input.ObservedAt.Time.UTC().Format(time.RFC3339Nano))
+	_, exists := f.stored[key]
+	f.stored[key] = struct{}{}
 	f.created = append(f.created, input)
-	return database.MarketCandle{ID: int64(len(f.created))}, nil
+	return database.MarketCandleWrite{
+		Candle:   database.MarketCandle{ID: int64(len(f.created))},
+		Inserted: !exists,
+	}, nil
 }
 
 func (f *fakeCandleRepository) ListByCanonicalSymbol(context.Context, string, string, string, pgtype.Timestamptz, pgtype.Timestamptz) ([]database.MarketCandle, error) {

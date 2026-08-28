@@ -174,13 +174,13 @@ PGPASSWORD=change-me-locally psql \
 | Operation | Repeat behavior |
 |---|---|
 | Macro CSV seed | Idempotent: existing dataset/date rows are updated |
-| Binance candle ingestion | Current pipeline inserts; repeated identical candles can hit the unique constraint |
-| Yahoo candle ingestion | Current pipeline inserts; repeated identical candles can hit the unique constraint |
+| Binance candle ingestion | Idempotent: existing source/interval/open-time rows are updated |
+| Yahoo candle ingestion | Idempotent: existing source/interval/open-time rows are updated |
 | Failed provider request | A failed `ingestion_runs` row is retained for debugging |
 
-Market-candle upsert behavior will be added in the data-quality and reliability
-phase. Until then, use a new date window for repeated market-provider tests or
-inspect the existing candle range before rerunning.
+Market-candle upsert behavior is implemented in the repository. Repeating a
+market-provider window is safe: existing natural-key rows are refreshed and the
+ingestion run reports them under `rows_updated`.
 
 ## 10. Troubleshooting guide
 

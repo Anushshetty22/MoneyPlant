@@ -72,8 +72,10 @@ type InstrumentSourceRepository interface {
 }
 
 // MarketCandleRepository defines the persistence operations used by market ingestion.
+// Phase 5.4 update: Upsert was added so repeated provider windows refresh rows
+// instead of failing on the market_candles natural-key constraint.
 type MarketCandleRepository interface {
-	Create(context.Context, database.MarketCandleInput) (database.MarketCandle, error)
+	Upsert(context.Context, database.MarketCandleInput) (database.MarketCandleWrite, error)
 	ListByCanonicalSymbol(context.Context, string, string, string, pgtype.Timestamptz, pgtype.Timestamptz) ([]database.MarketCandle, error)
 }
 
