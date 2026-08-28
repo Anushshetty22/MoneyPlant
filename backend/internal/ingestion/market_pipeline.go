@@ -64,10 +64,13 @@ func (s *MarketIngestionService) IngestHistorical(
 	request HistoricalCandleRequest,
 ) (MarketIngestionResult, error) {
 	startedAt := pgtype.Timestamptz{Time: time.Now().UTC(), Valid: true}
-	scope, err := json.Marshal(map[string]string{
+	scope, err := json.Marshal(map[string]interface{}{
 		"canonical_symbol": canonicalSymbol,
 		"provider_symbol":  request.ProviderSymbol,
 		"interval":         request.Interval,
+		// Phase 5.2 update: the source ID is now recorded in the run scope so
+		// audit history identifies the exact provider mapping used.
+		"instrument_source_id": instrumentSourceID,
 	})
 	if err != nil {
 		return MarketIngestionResult{}, fmt.Errorf("marshal ingestion scope: %w", err)
@@ -92,7 +95,7 @@ func (s *MarketIngestionService) IngestHistorical(
 	candles, err := s.provider.FetchHistoricalCandles(ctx, request)
 	if err != nil {
 		errorMessage := err.Error()
-		if _, completeErr := s.runTracker.Complete(ctx, run.ID, "failed", completionTimestamp(), 0, 0, 0, 0, &errorMessage); completeErr != nil {
+		if _, completeErr := completeIngestionRun(ctx, s.runTracker, run.ID, "failed", completionTimestamp(), 0, 0, 0, 0, &errorMessage); completeErr != nil {
 			return MarketIngestionResult{}, fmt.Errorf("fetch candles: %v; complete failed run: %w", err, completeErr)
 		}
 		return MarketIngestionResult{RunID: run.ID}, fmt.Errorf("fetch historical candles: %w", err)
@@ -109,7 +112,7 @@ func (s *MarketIngestionService) IngestHistorical(
 		// rows from reaching the database repository.
 		if err := ValidateMarketCandle(candle); err != nil {
 			errorMessage := err.Error()
-			if _, completeErr := s.runTracker.Complete(ctx, run.ID, "partial", completionTimestamp(), result.RowsReceived, result.RowsInserted, result.RowsUpdated, result.RowsRejected+1, &errorMessage); completeErr != nil {
+			if _, completeErr := completeIngestionRun(ctx, s.runTracker, run.ID, "partial", completionTimestamp(), result.RowsReceived, result.RowsInserted, result.RowsUpdated, result.RowsRejected+1, &errorMessage); completeErr != nil {
 				return result, fmt.Errorf("validate market candle: %v; complete partial run: %w", err, completeErr)
 			}
 			result.RowsRejected++
@@ -118,7 +121,7 @@ func (s *MarketIngestionService) IngestHistorical(
 
 		if _, err := s.candleStore.Create(ctx, candle); err != nil {
 			errorMessage := err.Error()
-			if _, completeErr := s.runTracker.Complete(ctx, run.ID, "partial", completionTimestamp(), result.RowsReceived, result.RowsInserted, result.RowsUpdated, result.RowsRejected+1, &errorMessage); completeErr != nil {
+			if _, completeErr := completeIngestionRun(ctx, s.runTracker, run.ID, "partial", completionTimestamp(), result.RowsReceived, result.RowsInserted, result.RowsUpdated, result.RowsRejected+1, &errorMessage); completeErr != nil {
 				return result, fmt.Errorf("persist candle: %v; complete partial run: %w", err, completeErr)
 			}
 			result.RowsRejected++
@@ -132,7 +135,7 @@ func (s *MarketIngestionService) IngestHistorical(
 	}
 
 	// Mark the run successful after every candle has been persisted.
-	if _, err := s.runTracker.Complete(ctx, run.ID, "succeeded", completionTimestamp(), result.RowsReceived, result.RowsInserted, result.RowsUpdated, result.RowsRejected, nil); err != nil {
+	if _, err := completeIngestionRun(ctx, s.runTracker, run.ID, "succeeded", completionTimestamp(), result.RowsReceived, result.RowsInserted, result.RowsUpdated, result.RowsRejected, nil); err != nil {
 		return result, fmt.Errorf("complete successful ingestion run: %w", err)
 	}
 

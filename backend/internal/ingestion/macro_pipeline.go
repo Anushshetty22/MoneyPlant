@@ -93,7 +93,7 @@ func (s *MacroIngestionService) Seed(ctx context.Context, source io.Reader) (Mac
 	observations, err := s.reader.Read(ctx, source)
 	if err != nil {
 		errorMessage := err.Error()
-		if _, completeErr := s.runTracker.Complete(ctx, run.ID, "failed", completionTimestamp(), 0, 0, 0, 0, &errorMessage); completeErr != nil {
+		if _, completeErr := completeIngestionRun(ctx, s.runTracker, run.ID, "failed", completionTimestamp(), 0, 0, 0, 0, &errorMessage); completeErr != nil {
 			return MacroIngestionResult{RunID: run.ID}, fmt.Errorf("read macro CSV: %v; complete failed run: %w", err, completeErr)
 		}
 		return MacroIngestionResult{RunID: run.ID}, fmt.Errorf("read macro CSV: %w", err)
@@ -112,7 +112,7 @@ func (s *MacroIngestionService) Seed(ctx context.Context, source io.Reader) (Mac
 		)
 		if err != nil {
 			errorMessage := err.Error()
-			if _, completeErr := s.runTracker.Complete(ctx, run.ID, "partial", completionTimestamp(), result.RowsReceived, result.RowsInserted, result.RowsUpdated, result.RowsRejected+1, &errorMessage); completeErr != nil {
+			if _, completeErr := completeIngestionRun(ctx, s.runTracker, run.ID, "partial", completionTimestamp(), result.RowsReceived, result.RowsInserted, result.RowsUpdated, result.RowsRejected+1, &errorMessage); completeErr != nil {
 				return result, fmt.Errorf("persist macro observation: %v; complete partial run: %w", err, completeErr)
 			}
 			result.RowsRejected++
@@ -126,7 +126,7 @@ func (s *MacroIngestionService) Seed(ctx context.Context, source io.Reader) (Mac
 		}
 	}
 
-	if _, err := s.runTracker.Complete(ctx, run.ID, "succeeded", completionTimestamp(), result.RowsReceived, result.RowsInserted, result.RowsUpdated, result.RowsRejected, nil); err != nil {
+	if _, err := completeIngestionRun(ctx, s.runTracker, run.ID, "succeeded", completionTimestamp(), result.RowsReceived, result.RowsInserted, result.RowsUpdated, result.RowsRejected, nil); err != nil {
 		return result, fmt.Errorf("complete successful macro ingestion run: %w", err)
 	}
 

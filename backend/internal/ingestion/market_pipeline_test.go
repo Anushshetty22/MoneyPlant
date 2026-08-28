@@ -107,6 +107,42 @@ func TestMarketIngestionServicePartialFailure(t *testing.T) {
 	}
 }
 
+// TestMarketIngestionServiceFinalizesAfterCancellation verifies that audit
+// cleanup is still possible after a provider cancels the main operation.
+//
+// Phase 5.2 update: this test protects the operational guarantee that a failed
+// or canceled batch does not remain indefinitely in status=running.
+func TestMarketIngestionServiceFinalizesAfterCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	provider, err := ingestion.NewFixtureMarketDataProvider("fixture", nil)
+	if err != nil {
+		t.Fatalf("create fixture provider: %v", err)
+	}
+	// Cancel before the call so the provider returns context.Canceled. The run
+	// tracker still receives a fresh cleanup context from the pipeline helper.
+	cancel()
+	runTracker := &fakeIngestionRunTracker{rejectCanceledComplete: true}
+	service := ingestion.NewMarketIngestionService(provider, &fakeCandleRepository{}, runTracker)
+
+	result, err := service.IngestHistorical(ctx, "BTCUSDT", 42, ingestion.HistoricalCandleRequest{
+		ProviderSymbol: "BTCUSDT",
+		Interval:       "1d",
+		From:           timestamp(time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)),
+		To:             timestamp(time.Date(2026, time.January, 2, 0, 0, 0, 0, time.UTC)),
+	})
+	if err == nil {
+		t.Fatal("expected canceled ingestion error, got nil")
+	}
+	if runTracker.completed.Status != "failed" {
+		t.Fatalf("completed run status = %q, want failed", runTracker.completed.Status)
+	}
+	if result.RunID == 0 {
+		t.Fatal("expected a run ID for the canceled operation")
+	}
+}
+
 // fixtureCandle creates the smallest valid input needed to test the pipeline's
 // provider filtering and instrument-source assignment behavior.
 func fixtureCandle(observedAt time.Time) database.MarketCandleInput {
@@ -161,9 +197,10 @@ func (f *fakeCandleRepository) ListByCanonicalSymbol(context.Context, string, st
 }
 
 type fakeIngestionRunTracker struct {
-	nextID    int64
-	created   database.IngestionRun
-	completed database.IngestionRun
+	nextID                 int64
+	created                database.IngestionRun
+	completed              database.IngestionRun
+	rejectCanceledComplete bool
 }
 
 func (f *fakeIngestionRunTracker) Create(_ context.Context, runType, provider string, startedAt, requestedFrom, requestedTo pgtype.Timestamptz, scope []byte) (database.IngestionRun, error) {
@@ -181,7 +218,10 @@ func (f *fakeIngestionRunTracker) Create(_ context.Context, runType, provider st
 	return f.created, nil
 }
 
-func (f *fakeIngestionRunTracker) Complete(_ context.Context, id int64, status string, completedAt pgtype.Timestamptz, rowsReceived, rowsInserted, rowsUpdated, rowsRejected int64, errorMessage *string) (database.IngestionRun, error) {
+func (f *fakeIngestionRunTracker) Complete(ctx context.Context, id int64, status string, completedAt pgtype.Timestamptz, rowsReceived, rowsInserted, rowsUpdated, rowsRejected int64, errorMessage *string) (database.IngestionRun, error) {
+	if f.rejectCanceledComplete && ctx.Err() != nil {
+		return database.IngestionRun{}, ctx.Err()
+	}
 	f.completed = f.created
 	f.completed.ID = id
 	f.completed.Status = status
