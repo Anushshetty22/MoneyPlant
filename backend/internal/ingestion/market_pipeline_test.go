@@ -143,6 +143,45 @@ func TestMarketIngestionServiceFinalizesAfterCancellation(t *testing.T) {
 	}
 }
 
+// TestMarketIngestionServiceRejectsInvalidProviderCandle verifies that the
+// application validation gate runs before the candle repository is called.
+//
+// Phase 5.3 update: this test covers the operational path for a malformed
+// provider row: the row is rejected, no persistence call is made, and the audit
+// run is completed as partial.
+func TestMarketIngestionServiceRejectsInvalidProviderCandle(t *testing.T) {
+	baseTime := time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC)
+	invalid := fixtureCandle(baseTime)
+	invalid.High = numeric("99")
+	provider, err := ingestion.NewFixtureMarketDataProvider("fixture", []database.MarketCandleInput{invalid})
+	if err != nil {
+		t.Fatalf("create fixture provider: %v", err)
+	}
+
+	candleStore := &fakeCandleRepository{}
+	runTracker := &fakeIngestionRunTracker{}
+	service := ingestion.NewMarketIngestionService(provider, candleStore, runTracker)
+
+	result, err := service.IngestHistorical(context.Background(), "BTCUSDT", 42, ingestion.HistoricalCandleRequest{
+		ProviderSymbol: "BTCUSDT",
+		Interval:       "1d",
+		From:           timestamp(baseTime),
+		To:             timestamp(baseTime.Add(24 * time.Hour)),
+	})
+	if err == nil {
+		t.Fatal("expected validation error, got nil")
+	}
+	if result.RowsReceived != 1 || result.RowsInserted != 0 || result.RowsRejected != 1 {
+		t.Fatalf("result = %#v, want one received, zero inserted, one rejected", result)
+	}
+	if len(candleStore.created) != 0 {
+		t.Fatalf("stored candles = %d, want 0", len(candleStore.created))
+	}
+	if runTracker.completed.Status != "partial" {
+		t.Fatalf("completed run status = %q, want partial", runTracker.completed.Status)
+	}
+}
+
 // fixtureCandle creates the smallest valid input needed to test the pipeline's
 // provider filtering and instrument-source assignment behavior.
 func fixtureCandle(observedAt time.Time) database.MarketCandleInput {

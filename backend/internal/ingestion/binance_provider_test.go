@@ -3,6 +3,8 @@ package ingestion_test
 import (
 	// context is passed into the provider request to exercise the real interface.
 	"context"
+	// encoding/json creates a 1,000-row response for the pagination test.
+	"encoding/json"
 	// net/http validates the request method and lets the test server return a fixture response.
 	"net/http"
 	// net/http/httptest creates a local HTTP endpoint without calling Binance's network.
@@ -108,6 +110,69 @@ func TestBinanceMarketDataProviderRejectsUnsupportedInterval(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected unsupported interval error, got nil")
+	}
+}
+
+// TestBinanceMarketDataProviderPaginatesLargeWindows verifies that a full
+// provider page advances the request window instead of silently truncating data.
+//
+// Phase 5.3 update: the local server returns 1,000 candles on the first request
+// and one candle on the second request. The test confirms the adapter returns
+// all 1,001 rows and makes the expected two-page workflow without Binance access.
+func TestBinanceMarketDataProviderPaginatesLargeWindows(t *testing.T) {
+	const candleMilliseconds int64 = 24 * 60 * 60 * 1000
+	baseOpen := int64(1785974400000)
+	requestCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		rowCount := 1
+		firstOpen := baseOpen + int64(requestCount-1)*1000*candleMilliseconds
+		if requestCount == 1 {
+			rowCount = 1000
+		}
+
+		rows := make([][]any, 0, rowCount)
+		for index := 0; index < rowCount; index++ {
+			openTime := firstOpen + int64(index)*candleMilliseconds
+			rows = append(rows, []any{
+				openTime,
+				"100.00000000", "105.00000000", "95.00000000", "102.00000000", "1000.00000000",
+				openTime + candleMilliseconds - 1, "102000.00000000", 10,
+				"500.00000000", "51000.00000000", "0",
+			})
+		}
+
+		body, err := json.Marshal(rows)
+		if err != nil {
+			t.Errorf("marshal pagination response: %v", err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(body)
+	}))
+	defer server.Close()
+
+	provider, err := ingestion.NewBinanceMarketDataProvider(server.Client(), server.URL)
+	if err != nil {
+		t.Fatalf("create Binance provider: %v", err)
+	}
+
+	from := time.UnixMilli(baseOpen).UTC()
+	to := from.Add(1001 * 24 * time.Hour)
+	candles, err := provider.FetchHistoricalCandles(context.Background(), ingestion.HistoricalCandleRequest{
+		ProviderSymbol: "BTCUSDT",
+		Interval:       "1d",
+		From:           binanceTimestamp(from),
+		To:             binanceTimestamp(to),
+	})
+	if err != nil {
+		t.Fatalf("fetch paginated Binance candles: %v", err)
+	}
+	if requestCount != 2 {
+		t.Fatalf("request count = %d, want 2", requestCount)
+	}
+	if len(candles) != 1001 {
+		t.Fatalf("candles = %d, want 1001", len(candles))
 	}
 }
 
