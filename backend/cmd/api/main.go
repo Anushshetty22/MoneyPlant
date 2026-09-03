@@ -6,13 +6,25 @@ package main
 import (
 	// context and time give the startup database check a finite deadline.
 	"context"
+	// errors lets shutdown distinguish the expected http.ErrServerClosed value
+	// from an unexpected server failure.
+	"errors"
 	// The standard-library log package writes timestamped messages to the terminal.
 	// We use it here for startup and fatal configuration messages.
 	"log"
+	// net/http provides the expected error returned when a server is shut down.
+	"net/http"
+	// os and os/signal allow the process to wait for Ctrl+C or a termination signal.
+	"os"
+	"os/signal"
+	// syscall provides SIGTERM, the standard graceful-termination signal used
+	// by Docker and most process managers.
+	"syscall"
 	"time"
 
 	"github.com/Anushshetty22/MoneyPlant/backend/internal/config"
 	"github.com/Anushshetty22/MoneyPlant/backend/internal/database"
+	"github.com/Anushshetty22/MoneyPlant/backend/internal/httpapi"
 )
 
 // main is the first function executed when the API program starts.
@@ -65,4 +77,48 @@ func main() {
 		cfg.PostgresDatabase,
 		cfg.PostgresUser,
 	)
+
+	// Phase 6.1 update: construct the HTTP server after configuration and database
+	// startup have succeeded. This ordering prevents the API from accepting
+	// requests while a required backend dependency is unavailable.
+	apiServer := httpapi.NewServer(cfg.APIHost, cfg.APIPort)
+
+	// Phase 6.1 update: run ListenAndServe in a goroutine so main can wait for
+	// either a server failure or an operating-system shutdown signal. A buffered
+	// channel lets the server goroutine report its result without being stuck if
+	// the signal path wins the select first.
+	serverErrors := make(chan error, 1)
+	go func() {
+		log.Printf("MoneyPlant HTTP API listening on %s", apiServer.Addr)
+		serverErrors <- apiServer.ListenAndServe()
+	}()
+
+	// Phase 6.1 update: subscribe to SIGINT (Ctrl+C) and SIGTERM (normal process
+	// termination). signal.Notify delivers those OS events to this channel so the
+	// process can finish active requests before closing its resources.
+	shutdownSignals := make(chan os.Signal, 1)
+	signal.Notify(shutdownSignals, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(shutdownSignals)
+
+	select {
+	case err := <-serverErrors:
+		// http.Server returns ErrServerClosed during an intentional shutdown. Any
+		// other error means the server stopped unexpectedly and should be reported.
+		// We continue to the shared shutdown block so the database pool and any
+		// remaining HTTP resources still follow the normal cleanup path.
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Printf("HTTP server error: %v", err)
+		}
+	case shutdownSignal := <-shutdownSignals:
+		log.Printf("shutdown signal received: %s", shutdownSignal)
+	}
+
+	// Phase 6.1 update: give active HTTP requests five seconds to finish before
+	// forcefully closing connections. Shutdown does not accept new requests and
+	// returns once existing handlers complete or the deadline expires.
+	shutdownContext, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+	if err := apiServer.Shutdown(shutdownContext); err != nil {
+		log.Printf("HTTP server shutdown error: %v", err)
+	}
 }
