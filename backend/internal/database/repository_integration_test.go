@@ -56,6 +56,9 @@ func TestInstrumentAndSourceRepositoryRoundTrip(t *testing.T) {
 	// Construct the same repository objects used by future ingestion and API code.
 	instrumentRepository := database.NewInstrumentRepository(pool)
 	sourceRepository := database.NewInstrumentSourceRepository(pool)
+	marketCandleRepository := database.NewMarketCandleRepository(pool)
+	macroDatasetRepository := database.NewMacroDatasetRepository(pool)
+	macroObservationRepository := database.NewMacroObservationRepository(pool)
 
 	// Use a unique uppercase symbol because instruments.canonical_symbol is unique
 	// and the database check requires canonical symbols to be uppercase.
@@ -64,6 +67,7 @@ func TestInstrumentAndSourceRepositoryRoundTrip(t *testing.T) {
 	providerSymbol := fmt.Sprintf("TEST%v.NS", testID)
 	exchange := "NSE"
 	metadata := []byte(`{"test":true}`)
+	var createdSourceID int64
 
 	// Create verifies the INSERT, generated ID, database defaults, and constraints.
 	createdInstrument, err := instrumentRepository.Create(
@@ -87,7 +91,13 @@ func TestInstrumentAndSourceRepositoryRoundTrip(t *testing.T) {
 		cleanupContext, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cleanupCancel()
 
-		_, cleanupErr := pool.Exec(cleanupContext, "DELETE FROM instrument_sources WHERE instrument_id = $1", createdInstrument.ID)
+		// Candles reference the provider source, so delete them before deleting
+		// the temporary source and canonical instrument.
+		_, cleanupErr := pool.Exec(cleanupContext, "DELETE FROM market_candles WHERE instrument_source_id = $1", createdSourceID)
+		if cleanupErr != nil {
+			t.Errorf("clean up test market candles: %v", cleanupErr)
+		}
+		_, cleanupErr = pool.Exec(cleanupContext, "DELETE FROM instrument_sources WHERE instrument_id = $1", createdInstrument.ID)
 		if cleanupErr != nil {
 			t.Errorf("clean up test source: %v", cleanupErr)
 		}
@@ -122,6 +132,7 @@ func TestInstrumentAndSourceRepositoryRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create test provider source: %v", err)
 	}
+	createdSourceID = createdSource.ID
 
 	// Listing by canonical symbol verifies the join from instruments to mappings.
 	sources, err := sourceRepository.ListByCanonicalSymbol(ctx, symbol)
@@ -142,9 +153,105 @@ func TestInstrumentAndSourceRepositoryRoundTrip(t *testing.T) {
 		t.Fatalf("authoritative provider = %q, want %q", authoritativeSource.Provider, "yahoo")
 	}
 
+	// Phase 5 integration verification: reuse one valid retrieval timestamp for
+	// the temporary market candle and ingestion-run records created by this test.
+	now := pgtype.Timestamptz{Time: time.Now().UTC(), Valid: true}
+
+	// Phase 5.4 update: verify the real market repository's insert/update paths
+	// against PostgreSQL, including the natural-key uniqueness behavior.
+	marketObservedAt := pgtype.Timestamptz{Time: time.Date(2026, time.January, 5, 9, 15, 0, 0, time.UTC), Valid: true}
+	marketInput := database.MarketCandleInput{
+		InstrumentSourceID: createdSource.ID,
+		Interval:           "1d",
+		ObservedAt:         marketObservedAt,
+		SourceCloseAt:      pgtype.Timestamptz{Time: time.Date(2026, time.January, 6, 9, 14, 59, 999000000, time.UTC), Valid: true},
+		Open:               integrationNumeric("100"),
+		High:               integrationNumeric("105"),
+		Low:                integrationNumeric("95"),
+		Close:              integrationNumeric("102"),
+		Volume:             integrationNumeric("1000"),
+		SourceRetrievedAt:  now,
+	}
+	firstMarketWrite, err := marketCandleRepository.Upsert(ctx, marketInput)
+	if err != nil {
+		t.Fatalf("insert test market candle: %v", err)
+	}
+	if !firstMarketWrite.Inserted {
+		t.Fatal("first market upsert reported update, want insert")
+	}
+
+	marketInput.Close = integrationNumeric("103")
+	secondMarketWrite, err := marketCandleRepository.Upsert(ctx, marketInput)
+	if err != nil {
+		t.Fatalf("update test market candle: %v", err)
+	}
+	if secondMarketWrite.Inserted {
+		t.Fatal("second market upsert reported insert, want update")
+	}
+	marketRows, err := marketCandleRepository.ListByCanonicalSymbol(ctx, symbol, "yahoo", "1d", marketObservedAt, pgtype.Timestamptz{Time: marketObservedAt.Time.Add(24 * time.Hour), Valid: true})
+	if err != nil {
+		t.Fatalf("list test market candles: %v", err)
+	}
+	if len(marketRows) != 1 {
+		t.Fatalf("market rows = %d, want one row after repeated upsert", len(marketRows))
+	}
+
+	// Phase 5.4 update: perform the same insert/update verification for macro
+	// observations, whose natural key is dataset plus observed_on date.
+	testMacroCode := fmt.Sprintf("integration_macro_%v", testID)
+	createdDataset, err := macroDatasetRepository.Create(
+		ctx,
+		testMacroCode,
+		"MoneyPlant Integration Test Macro Dataset",
+		"test",
+		"Integration metric",
+		"percent",
+		"monthly",
+		"reference_period",
+		nil,
+		"https://example.invalid/moneyplant-integration",
+		now,
+		[]byte(`{"test":true}`),
+	)
+	if err != nil {
+		t.Fatalf("create test macro dataset: %v", err)
+	}
+	t.Cleanup(func() {
+		cleanupContext, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cleanupCancel()
+		if _, cleanupErr := pool.Exec(cleanupContext, "DELETE FROM macro_observations WHERE macro_dataset_id = $1", createdDataset.ID); cleanupErr != nil {
+			t.Errorf("clean up test macro observations: %v", cleanupErr)
+		}
+		if _, cleanupErr := pool.Exec(cleanupContext, "DELETE FROM macro_datasets WHERE id = $1", createdDataset.ID); cleanupErr != nil {
+			t.Errorf("clean up test macro dataset: %v", cleanupErr)
+		}
+	})
+
+	macroDate := pgtype.Date{Time: time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), Valid: true}
+	firstMacroWrite, err := macroObservationRepository.Upsert(ctx, createdDataset.ID, macroDate, integrationNumeric("2.73"), now, nil, []byte(`{"test":true}`))
+	if err != nil {
+		t.Fatalf("insert test macro observation: %v", err)
+	}
+	if !firstMacroWrite.Inserted {
+		t.Fatal("first macro upsert reported update, want insert")
+	}
+	secondMacroWrite, err := macroObservationRepository.Upsert(ctx, createdDataset.ID, macroDate, integrationNumeric("2.74"), now, nil, []byte(`{"test":true,"updated":true}`))
+	if err != nil {
+		t.Fatalf("update test macro observation: %v", err)
+	}
+	if secondMacroWrite.Inserted {
+		t.Fatal("second macro upsert reported insert, want update")
+	}
+	macroRows, err := macroObservationRepository.ListByDatasetCode(ctx, testMacroCode)
+	if err != nil {
+		t.Fatalf("list test macro observations: %v", err)
+	}
+	if len(macroRows) != 1 {
+		t.Fatalf("macro rows = %d, want one row after repeated upsert", len(macroRows))
+	}
+
 	// Exercise the ingestion repository using the same run lifecycle as a batch job.
 	ingestionRepository := database.NewIngestionRunRepository(pool)
-	now := pgtype.Timestamptz{Time: time.Now().UTC(), Valid: true}
 	runScope := []byte(fmt.Sprintf(`{"symbol":%q}`, providerSymbol))
 	run, err := ingestionRepository.Create(ctx, "market_api", "yahoo", now, pgtype.Timestamptz{}, pgtype.Timestamptz{}, runScope)
 	if err != nil {
@@ -175,4 +282,14 @@ func TestInstrumentAndSourceRepositoryRoundTrip(t *testing.T) {
 	if completed.Status != "succeeded" || completed.RowsInserted != 1 {
 		t.Fatalf("completed ingestion run = %#v, want succeeded with one insert", completed)
 	}
+}
+
+// integrationNumeric converts an exact decimal string into the pgtype numeric
+// representation used by the repositories, avoiding float64 in the test path.
+func integrationNumeric(value string) pgtype.Numeric {
+	var numericValue pgtype.Numeric
+	if err := numericValue.Scan(value); err != nil {
+		panic(err)
+	}
+	return numericValue
 }
