@@ -84,3 +84,22 @@ FROM macro_observations
 JOIN macro_datasets ON macro_datasets.id = macro_observations.macro_dataset_id
 WHERE macro_datasets.code = $1
 ORDER BY macro_observations.observed_on;
+
+-- Phase 6.2 update: add a date-range query for dashboard requests. The range
+-- is half-open, so the start date is included and the end date is excluded.
+-- This matches the market-candle API behavior and makes adjacent requests safe.
+-- name: ListMacroObservationsByDatasetCodeInRange :many
+SELECT
+    macro_observations.id,
+    macro_observations.macro_dataset_id,
+    macro_observations.observed_on,
+    macro_observations.value,
+    macro_observations.source_retrieved_at,
+    macro_observations.source_row_reference,
+    macro_observations.metadata
+FROM macro_observations
+JOIN macro_datasets ON macro_datasets.id = macro_observations.macro_dataset_id
+WHERE macro_datasets.code = $1
+  AND macro_observations.observed_on >= $2
+  AND macro_observations.observed_on < $3
+ORDER BY macro_observations.observed_on;

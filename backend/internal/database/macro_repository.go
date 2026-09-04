@@ -341,6 +341,48 @@ func (r *MacroObservationRepository) ListByDatasetCode(ctx context.Context, code
 	return observations, nil
 }
 
+// ListByDatasetCodeInRange returns observations for one dataset within a
+// half-open SQL DATE range: observed_on >= from and observed_on < to.
+//
+// Phase 6.2 update: this method was added for the macro observations API so a
+// dashboard can request only the visible time window instead of downloading an
+// entire historical series.
+func (r *MacroObservationRepository) ListByDatasetCodeInRange(
+	ctx context.Context,
+	code string,
+	from pgtype.Date,
+	to pgtype.Date,
+) ([]MacroObservation, error) {
+	// sqlc binds the two pgtype.Date values as PostgreSQL DATE parameters. No
+	// timezone conversion is performed because macro observations represent a
+	// calendar date, not an instant during a day.
+	rows, err := r.queries.ListMacroObservationsByDatasetCodeInRange(ctx, generated.ListMacroObservationsByDatasetCodeInRangeParams{
+		Code:         code,
+		ObservedOn:   from,
+		ObservedOn_2: to,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list observations for dataset %q in range: %w", code, err)
+	}
+
+	// Convert generated rows using the same helper as the unfiltered method so
+	// nullable source references and exact numeric values behave consistently.
+	observations := make([]MacroObservation, 0, len(rows))
+	for _, row := range rows {
+		observations = append(observations, macroObservationFromGenerated(
+			row.ID,
+			row.MacroDatasetID,
+			row.ObservedOn,
+			row.Value,
+			row.SourceRetrievedAt,
+			row.SourceRowReference,
+			row.Metadata,
+		))
+	}
+
+	return observations, nil
+}
+
 // macroDatasetFromGenerated centralizes nullable base-period conversion.
 func macroDatasetFromGenerated(
 	id int64,

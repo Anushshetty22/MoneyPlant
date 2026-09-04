@@ -36,6 +36,8 @@ func NewServer(
 	port int,
 	instrumentRepository *database.InstrumentRepository,
 	marketCandleRepository *database.MarketCandleRepository,
+	macroDatasetRepository *database.MacroDatasetRepository,
+	macroObservationRepository *database.MacroObservationRepository,
 ) *http.Server {
 	// ServeMux maps an incoming HTTP method and path to a handler function.
 	// The health route is the first endpoint because it gives us a small,
@@ -54,6 +56,16 @@ func NewServer(
 	// parsed and validated by the handler before it calls the repository.
 	mux.HandleFunc("GET /api/v1/candles", func(responseWriter http.ResponseWriter, request *http.Request) {
 		listCandlesHandler(responseWriter, request, marketCandleRepository)
+	})
+
+	// Phase 6.2 update: register macro dataset and observation read routes.
+	// Dataset definitions and observations use separate handlers because metadata
+	// and dated values have different response shapes and query requirements.
+	mux.HandleFunc("GET /api/v1/macro/datasets", func(responseWriter http.ResponseWriter, request *http.Request) {
+		listMacroDatasetsHandler(responseWriter, request, macroDatasetRepository)
+	})
+	mux.HandleFunc("GET /api/v1/macro/observations", func(responseWriter http.ResponseWriter, request *http.Request) {
+		listMacroObservationsHandler(responseWriter, request, macroObservationRepository)
 	})
 
 	// The middleware surrounds every registered route. This means future routes

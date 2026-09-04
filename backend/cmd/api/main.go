@@ -86,11 +86,23 @@ func main() {
 	// Phase 6.2 update: create the market-candle repository from the same shared
 	// pool so API candle reads use the database layer already used by ingestion.
 	marketCandleRepository := database.NewMarketCandleRepository(databasePool)
+	// Phase 6.2 update: create both macro repositories from the shared pool so
+	// dataset metadata and observations can be read by the API without opening
+	// separate database pools.
+	macroDatasetRepository := database.NewMacroDatasetRepository(databasePool)
+	macroObservationRepository := database.NewMacroObservationRepository(databasePool)
 
 	// Phase 6.1 update: construct the HTTP server after configuration and database
 	// startup have succeeded. This ordering prevents the API from accepting
 	// requests while a required backend dependency is unavailable.
-	apiServer := httpapi.NewServer(cfg.APIHost, cfg.APIPort, instrumentRepository, marketCandleRepository)
+	apiServer := httpapi.NewServer(
+		cfg.APIHost,
+		cfg.APIPort,
+		instrumentRepository,
+		marketCandleRepository,
+		macroDatasetRepository,
+		macroObservationRepository,
+	)
 
 	// Phase 6.1 update: run ListenAndServe in a goroutine so main can wait for
 	// either a server failure or an operating-system shutdown signal. A buffered

@@ -201,6 +201,70 @@ func (q *Queries) ListMacroObservationsByDatasetCode(ctx context.Context, code s
 	return items, nil
 }
 
+const listMacroObservationsByDatasetCodeInRange = `-- name: ListMacroObservationsByDatasetCodeInRange :many
+SELECT
+    macro_observations.id,
+    macro_observations.macro_dataset_id,
+    macro_observations.observed_on,
+    macro_observations.value,
+    macro_observations.source_retrieved_at,
+    macro_observations.source_row_reference,
+    macro_observations.metadata
+FROM macro_observations
+JOIN macro_datasets ON macro_datasets.id = macro_observations.macro_dataset_id
+WHERE macro_datasets.code = $1
+  AND macro_observations.observed_on >= $2
+  AND macro_observations.observed_on < $3
+ORDER BY macro_observations.observed_on
+`
+
+type ListMacroObservationsByDatasetCodeInRangeParams struct {
+	Code         string      `json:"code"`
+	ObservedOn   pgtype.Date `json:"observed_on"`
+	ObservedOn_2 pgtype.Date `json:"observed_on_2"`
+}
+
+type ListMacroObservationsByDatasetCodeInRangeRow struct {
+	ID                 int64              `json:"id"`
+	MacroDatasetID     int64              `json:"macro_dataset_id"`
+	ObservedOn         pgtype.Date        `json:"observed_on"`
+	Value              pgtype.Numeric     `json:"value"`
+	SourceRetrievedAt  pgtype.Timestamptz `json:"source_retrieved_at"`
+	SourceRowReference pgtype.Text        `json:"source_row_reference"`
+	Metadata           []byte             `json:"metadata"`
+}
+
+// Phase 6.2 update: add a date-range query for dashboard requests. The range
+// is half-open, so the start date is included and the end date is excluded.
+// This matches the market-candle API behavior and makes adjacent requests safe.
+func (q *Queries) ListMacroObservationsByDatasetCodeInRange(ctx context.Context, arg ListMacroObservationsByDatasetCodeInRangeParams) ([]ListMacroObservationsByDatasetCodeInRangeRow, error) {
+	rows, err := q.db.Query(ctx, listMacroObservationsByDatasetCodeInRange, arg.Code, arg.ObservedOn, arg.ObservedOn_2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMacroObservationsByDatasetCodeInRangeRow
+	for rows.Next() {
+		var i ListMacroObservationsByDatasetCodeInRangeRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.MacroDatasetID,
+			&i.ObservedOn,
+			&i.Value,
+			&i.SourceRetrievedAt,
+			&i.SourceRowReference,
+			&i.Metadata,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateMacroObservation = `-- name: UpdateMacroObservation :one
 UPDATE macro_observations
 SET value = $3,
