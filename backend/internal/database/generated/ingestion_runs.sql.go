@@ -157,6 +157,66 @@ func (q *Queries) CreateIngestionRun(ctx context.Context, arg CreateIngestionRun
 	return i, err
 }
 
+const listRecentIngestionRuns = `-- name: ListRecentIngestionRuns :many
+SELECT
+    id,
+    run_type,
+    provider,
+    status,
+    started_at,
+    completed_at,
+    requested_from,
+    requested_to,
+    rows_received,
+    rows_inserted,
+    rows_updated,
+    rows_rejected,
+    error_message,
+    scope,
+    created_at
+FROM ingestion_runs
+ORDER BY started_at DESC
+LIMIT $1
+`
+
+// Phase 6.2 update: add an all-provider history query for the API. The newest
+// runs appear first so the dashboard can show the latest pipeline activity.
+func (q *Queries) ListRecentIngestionRuns(ctx context.Context, limit int32) ([]IngestionRun, error) {
+	rows, err := q.db.Query(ctx, listRecentIngestionRuns, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []IngestionRun
+	for rows.Next() {
+		var i IngestionRun
+		if err := rows.Scan(
+			&i.ID,
+			&i.RunType,
+			&i.Provider,
+			&i.Status,
+			&i.StartedAt,
+			&i.CompletedAt,
+			&i.RequestedFrom,
+			&i.RequestedTo,
+			&i.RowsReceived,
+			&i.RowsInserted,
+			&i.RowsUpdated,
+			&i.RowsRejected,
+			&i.ErrorMessage,
+			&i.Scope,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRecentIngestionRunsByProvider = `-- name: ListRecentIngestionRunsByProvider :many
 SELECT
     id,

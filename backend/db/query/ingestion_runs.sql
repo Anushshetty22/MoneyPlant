@@ -82,3 +82,26 @@ FROM ingestion_runs
 WHERE provider = $1
 ORDER BY started_at DESC
 LIMIT $2;
+
+-- Phase 6.2 update: add an all-provider history query for the API. The newest
+-- runs appear first so the dashboard can show the latest pipeline activity.
+-- name: ListRecentIngestionRuns :many
+SELECT
+    id,
+    run_type,
+    provider,
+    status,
+    started_at,
+    completed_at,
+    requested_from,
+    requested_to,
+    rows_received,
+    rows_inserted,
+    rows_updated,
+    rows_rejected,
+    error_message,
+    scope,
+    created_at
+FROM ingestion_runs
+ORDER BY started_at DESC
+LIMIT $1;

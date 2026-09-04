@@ -91,6 +91,9 @@ func main() {
 	// separate database pools.
 	macroDatasetRepository := database.NewMacroDatasetRepository(databasePool)
 	macroObservationRepository := database.NewMacroObservationRepository(databasePool)
+	// Phase 6.2 update: create the ingestion-run repository so the API can expose
+	// provider status, row counts, requested ranges, and failure messages.
+	ingestionRunRepository := database.NewIngestionRunRepository(databasePool)
 
 	// Phase 6.1 update: construct the HTTP server after configuration and database
 	// startup have succeeded. This ordering prevents the API from accepting
@@ -102,6 +105,7 @@ func main() {
 		marketCandleRepository,
 		macroDatasetRepository,
 		macroObservationRepository,
+		ingestionRunRepository,
 	)
 
 	// Phase 6.1 update: run ListenAndServe in a goroutine so main can wait for

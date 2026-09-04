@@ -38,6 +38,7 @@ func NewServer(
 	marketCandleRepository *database.MarketCandleRepository,
 	macroDatasetRepository *database.MacroDatasetRepository,
 	macroObservationRepository *database.MacroObservationRepository,
+	ingestionRunRepository *database.IngestionRunRepository,
 ) *http.Server {
 	// ServeMux maps an incoming HTTP method and path to a handler function.
 	// The health route is the first endpoint because it gives us a small,
@@ -66,6 +67,12 @@ func NewServer(
 	})
 	mux.HandleFunc("GET /api/v1/macro/observations", func(responseWriter http.ResponseWriter, request *http.Request) {
 		listMacroObservationsHandler(responseWriter, request, macroObservationRepository)
+	})
+
+	// Phase 6.2 update: register the ingestion-history route so API clients can
+	// inspect pipeline outcomes and row counts without querying PostgreSQL.
+	mux.HandleFunc("GET /api/v1/ingestion-runs", func(responseWriter http.ResponseWriter, request *http.Request) {
+		listIngestionRunsHandler(responseWriter, request, ingestionRunRepository)
 	})
 
 	// The middleware surrounds every registered route. This means future routes

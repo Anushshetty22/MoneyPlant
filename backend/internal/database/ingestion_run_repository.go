@@ -139,6 +139,27 @@ func (r *IngestionRunRepository) ListRecentByProvider(ctx context.Context, provi
 	return runs, nil
 }
 
+// ListRecent returns recent audit records across all providers.
+//
+// Phase 6.2 update: this method was added for the ingestion-history API. The
+// optional provider filter is handled by the API layer, while this method keeps
+// the all-provider database query separate and easy to test.
+func (r *IngestionRunRepository) ListRecent(ctx context.Context, limit int32) ([]IngestionRun, error) {
+	// PostgreSQL applies newest-first ordering and the limit before rows reach Go,
+	// so the API does not need to load the complete audit history into memory.
+	rows, err := r.queries.ListRecentIngestionRuns(ctx, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list recent ingestion runs: %w", err)
+	}
+
+	runs := make([]IngestionRun, 0, len(rows))
+	for _, row := range rows {
+		runs = append(runs, ingestionRunFromGenerated(row))
+	}
+
+	return runs, nil
+}
+
 // ingestionRunFromGenerated converts nullable generated error text into the
 // application model while preserving all timestamps, counters, and JSON scope.
 func ingestionRunFromGenerated(row generated.IngestionRun) IngestionRun {
