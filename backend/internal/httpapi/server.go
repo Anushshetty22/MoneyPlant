@@ -18,6 +18,8 @@ import (
 	// time measures request duration and limits how long the server waits for
 	// clients that send incomplete or unusually slow requests.
 	"time"
+
+	"github.com/Anushshetty22/MoneyPlant/backend/internal/database"
 )
 
 // NewServer creates the configured HTTP server used by cmd/api/main.go.
@@ -29,12 +31,19 @@ import (
 //
 // Keeping construction separate makes the server easy to test without opening
 // a real network port and gives later phases one place to add API routes.
-func NewServer(host string, port int) *http.Server {
+func NewServer(host string, port int, instrumentRepository *database.InstrumentRepository) *http.Server {
 	// ServeMux maps an incoming HTTP method and path to a handler function.
 	// The health route is the first endpoint because it gives us a small,
 	// dependency-free way to confirm that the API process is reachable.
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", healthHandler)
+
+	// Phase 6.2 update: register the first database-backed read endpoint. The
+	// closure keeps the repository dependency attached to this route without
+	// using package-level mutable state, which makes future handler tests safer.
+	mux.HandleFunc("GET /api/v1/instruments", func(responseWriter http.ResponseWriter, request *http.Request) {
+		listInstrumentsHandler(responseWriter, request, instrumentRepository)
+	})
 
 	// The middleware surrounds every registered route. This means future routes
 	// automatically receive the same request logging behavior without repeating
@@ -73,10 +82,86 @@ func healthHandler(responseWriter http.ResponseWriter, request *http.Request) {
 	})
 }
 
+// instrumentResponse is the public JSON shape for one catalog instrument.
+// The database model contains internal metadata and Go field names, so this
+// response type explicitly controls which stable fields API clients receive.
+type instrumentResponse struct {
+	ID              int64   `json:"id"`
+	CanonicalSymbol string  `json:"canonical_symbol"`
+	Name            string  `json:"name"`
+	AssetType       string  `json:"asset_type"`
+	Exchange        *string `json:"exchange"`
+	Currency        string  `json:"currency"`
+	IsActive        bool    `json:"is_active"`
+}
+
+// listInstrumentsHandler serves the active instrument catalog.
+//
+// Its flow is:
+//  1. Check that the dependency was configured.
+//  2. Pass the request context to the repository.
+//  3. Convert internal models into the public response shape.
+//  4. Return a predictable JSON envelope to the client.
+func listInstrumentsHandler(
+	responseWriter http.ResponseWriter,
+	request *http.Request,
+	instrumentRepository *database.InstrumentRepository,
+) {
+	// A nil dependency is a server configuration problem, not a client error.
+	// Keeping this check makes the handler safer in tests and prevents a nil
+	// pointer panic if a future startup path forgets to wire the repository.
+	if instrumentRepository == nil {
+		writeJSON(responseWriter, http.StatusInternalServerError, map[string]string{
+			"error": "instrument repository is not configured",
+		})
+		return
+	}
+
+	// request.Context carries cancellation from the HTTP client through the
+	// handler into PostgreSQL. If the client disconnects, the query can stop
+	// promptly instead of consuming a connection unnecessarily.
+	instruments, err := instrumentRepository.ListActive(request.Context())
+	if err != nil {
+		// Log the detailed database error for operators, while returning a generic
+		// message to clients so internal database details are not exposed publicly.
+		log.Printf("list instruments: %v", err)
+		writeJSON(responseWriter, http.StatusInternalServerError, map[string]string{
+			"error": "unable to load instruments",
+		})
+		return
+	}
+
+	// Convert the database-facing application model to the deliberately smaller
+	// API contract. This boundary lets the database schema evolve without
+	// unexpectedly changing the frontend response format.
+	items := make([]instrumentResponse, 0, len(instruments))
+	for _, instrument := range instruments {
+		items = append(items, instrumentResponse{
+			ID:              instrument.ID,
+			CanonicalSymbol: instrument.CanonicalSymbol,
+			Name:            instrument.Name,
+			AssetType:       instrument.AssetType,
+			Exchange:        instrument.Exchange,
+			Currency:        instrument.Currency,
+			IsActive:        instrument.IsActive,
+		})
+	}
+
+	// The data envelope leaves room for future pagination metadata without
+	// changing the top-level response from an array into an object later.
+	writeJSON(responseWriter, http.StatusOK, map[string]any{
+		"data": items,
+	})
+}
+
 // writeJSON centralizes successful and error response serialization.
 // Handlers call this helper instead of manually setting headers and encoding
 // values, which keeps response behavior consistent across all API endpoints.
 func writeJSON(responseWriter http.ResponseWriter, statusCode int, value any) {
+	// Phase 6.2 update: centralize the JSON content type so every endpoint,
+	// including future error responses, is consistently advertised as JSON.
+	responseWriter.Header().Set("Content-Type", "application/json")
+
 	// Set the status before encoding so the client receives the intended HTTP
 	// status even when the value is an error response.
 	responseWriter.WriteHeader(statusCode)

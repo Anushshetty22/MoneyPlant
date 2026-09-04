@@ -37,3 +37,20 @@ SELECT
     metadata
 FROM instruments
 WHERE canonical_symbol = $1;
+
+-- Phase 6.2 update: add the first read-only API query. Returning only active
+-- instruments keeps the public catalog focused on symbols currently available
+-- for ingestion and charting.
+-- name: ListActiveInstruments :many
+SELECT
+    id,
+    canonical_symbol,
+    name,
+    asset_type,
+    exchange,
+    currency,
+    is_active,
+    metadata
+FROM instruments
+WHERE is_active = true
+ORDER BY canonical_symbol;

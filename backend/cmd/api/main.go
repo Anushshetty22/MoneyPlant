@@ -78,10 +78,16 @@ func main() {
 		cfg.PostgresUser,
 	)
 
+	// Phase 6.2 update: build the instrument repository from the already-open
+	// shared pool. Repositories do not create extra pools; they reuse PostgreSQL
+	// connections managed by databasePool and are then injected into the HTTP
+	// server that needs them.
+	instrumentRepository := database.NewInstrumentRepository(databasePool)
+
 	// Phase 6.1 update: construct the HTTP server after configuration and database
 	// startup have succeeded. This ordering prevents the API from accepting
 	// requests while a required backend dependency is unavailable.
-	apiServer := httpapi.NewServer(cfg.APIHost, cfg.APIPort)
+	apiServer := httpapi.NewServer(cfg.APIHost, cfg.APIPort, instrumentRepository)
 
 	// Phase 6.1 update: run ListenAndServe in a goroutine so main can wait for
 	// either a server failure or an operating-system shutdown signal. A buffered
