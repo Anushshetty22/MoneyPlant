@@ -122,3 +122,61 @@ func (q *Queries) GetInstrumentByCanonicalSymbol(ctx context.Context, canonicalS
 	)
 	return i, err
 }
+
+const listActiveInstruments = `-- name: ListActiveInstruments :many
+SELECT
+    id,
+    canonical_symbol,
+    name,
+    asset_type,
+    exchange,
+    currency,
+    is_active,
+    metadata
+FROM instruments
+WHERE is_active = true
+ORDER BY canonical_symbol
+`
+
+type ListActiveInstrumentsRow struct {
+	ID              int64       `json:"id"`
+	CanonicalSymbol string      `json:"canonical_symbol"`
+	Name            string      `json:"name"`
+	AssetType       string      `json:"asset_type"`
+	Exchange        pgtype.Text `json:"exchange"`
+	Currency        string      `json:"currency"`
+	IsActive        bool        `json:"is_active"`
+	Metadata        []byte      `json:"metadata"`
+}
+
+// Phase 6.2 update: add the first read-only API query. Returning only active
+// instruments keeps the public catalog focused on symbols currently available
+// for ingestion and charting.
+func (q *Queries) ListActiveInstruments(ctx context.Context) ([]ListActiveInstrumentsRow, error) {
+	rows, err := q.db.Query(ctx, listActiveInstruments)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListActiveInstrumentsRow
+	for rows.Next() {
+		var i ListActiveInstrumentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CanonicalSymbol,
+			&i.Name,
+			&i.AssetType,
+			&i.Exchange,
+			&i.Currency,
+			&i.IsActive,
+			&i.Metadata,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
