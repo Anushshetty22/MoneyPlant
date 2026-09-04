@@ -31,7 +31,12 @@ import (
 //
 // Keeping construction separate makes the server easy to test without opening
 // a real network port and gives later phases one place to add API routes.
-func NewServer(host string, port int, instrumentRepository *database.InstrumentRepository) *http.Server {
+func NewServer(
+	host string,
+	port int,
+	instrumentRepository *database.InstrumentRepository,
+	marketCandleRepository *database.MarketCandleRepository,
+) *http.Server {
 	// ServeMux maps an incoming HTTP method and path to a handler function.
 	// The health route is the first endpoint because it gives us a small,
 	// dependency-free way to confirm that the API process is reachable.
@@ -43,6 +48,12 @@ func NewServer(host string, port int, instrumentRepository *database.InstrumentR
 	// using package-level mutable state, which makes future handler tests safer.
 	mux.HandleFunc("GET /api/v1/instruments", func(responseWriter http.ResponseWriter, request *http.Request) {
 		listInstrumentsHandler(responseWriter, request, instrumentRepository)
+	})
+
+	// Phase 6.2 update: register the market-data route. Query parameters are
+	// parsed and validated by the handler before it calls the repository.
+	mux.HandleFunc("GET /api/v1/candles", func(responseWriter http.ResponseWriter, request *http.Request) {
+		listCandlesHandler(responseWriter, request, marketCandleRepository)
 	})
 
 	// The middleware surrounds every registered route. This means future routes
