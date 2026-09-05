@@ -1,4 +1,5 @@
 import MarketDashboard from "@/components/market-dashboard";
+import MacroDashboard from "@/components/macro-dashboard";
 import { listInstruments, type Instrument } from "@/lib/api";
 
 // Home is the server-rendered shell of the interactive dashboard.
@@ -35,11 +36,11 @@ export default async function Home() {
               Market intelligence, grounded in data.
             </h1>
             <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">
-              Explore daily market candles from the Go API and PostgreSQL data layer.
+              Explore market candles and macroeconomic indicators from the Go API and PostgreSQL data layer.
             </p>
           </div>
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
-            <span className="font-medium text-slate-800">Phase 7.2</span> · Interactive market view
+            <span className="font-medium text-slate-800">Phase 7.3</span> · Market and macro views
           </div>
         </header>
 
@@ -59,7 +60,10 @@ export default async function Home() {
             No active instruments are currently available.
           </div>
         ) : (
-          <MarketDashboard instruments={instruments} />
+          <>
+            <MarketDashboard instruments={instruments} />
+            <MacroDashboard />
+          </>
         )}
       </div>
     </main>

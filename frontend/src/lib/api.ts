@@ -34,6 +34,34 @@ export type Candle = {
   source_retrieved_at: string;
 };
 
+// MacroDataset describes the meaning and provenance of one macroeconomic
+// series. The dashboard uses it to label values correctly instead of displaying
+// an unexplained number.
+export type MacroDataset = {
+  id: number;
+  code: string;
+  name: string;
+  provider: string;
+  metric: string;
+  unit: string;
+  frequency: string;
+  observation_type: string;
+  base_period: string | null;
+  source_url: string;
+  retrieved_at: string;
+  is_active: boolean;
+};
+
+// MacroObservation contains one date and exact decimal value from a macro
+// dataset. Values remain strings until the chart maps them to SVG coordinates.
+export type MacroObservation = {
+  id: number;
+  observed_on: string;
+  value: string;
+  source_retrieved_at: string;
+  source_row_reference: string | null;
+};
+
 type DataResponse<T> = {
   data: T[];
 };
@@ -101,5 +129,51 @@ export async function listCandles(
   }
 
   const payload = (await response.json()) as DataResponse<Candle>;
+  return payload.data;
+}
+
+// listMacroDatasets loads the active series definitions used by the macro
+// selector. Browser requests go through the same-origin Next.js proxy.
+export async function listMacroDatasets(signal?: AbortSignal): Promise<MacroDataset[]> {
+  const response = await fetch(`${browserAPIBaseURL}/api/v1/macro/datasets`, {
+    cache: "no-store",
+    signal
+  });
+
+  if (!response.ok) {
+    throw new Error(`MoneyPlant API returned HTTP ${response.status}`);
+  }
+
+  const payload = (await response.json()) as DataResponse<MacroDataset>;
+  return payload.data;
+}
+
+// listMacroObservations loads one macro series, optionally restricted to a
+// date-only half-open range. Macro dates intentionally do not include a time.
+export async function listMacroObservations(
+  dataset: string,
+  from?: string,
+  to?: string,
+  signal?: AbortSignal
+): Promise<MacroObservation[]> {
+  const query = new URLSearchParams({ dataset });
+  if (from && to) {
+    query.set("from", from);
+    query.set("to", to);
+  }
+
+  const response = await fetch(
+    `${browserAPIBaseURL}/api/v1/macro/observations?${query.toString()}`,
+    {
+      cache: "no-store",
+      signal
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`MoneyPlant API returned HTTP ${response.status}`);
+  }
+
+  const payload = (await response.json()) as DataResponse<MacroObservation>;
   return payload.data;
 }

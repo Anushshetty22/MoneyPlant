@@ -13,6 +13,7 @@ This step creates:
 - Loading-error and empty-data states
 - A same-origin proxy for browser-side API requests
 - Interactive daily closing-price and volume charts
+- Macro dataset selection and date-filtered time-series charts
 
 ## Run locally
 
@@ -36,5 +37,7 @@ npm run dev
 Open `http://localhost:3000` in a browser.
 
 The first page requests `GET /api/v1/instruments` from the Go API and then lets
-you select an instrument and date range for `GET /api/v1/candles`. The chart is
-drawn with SVG so the mapping from API values to screen coordinates is visible.
+you select an instrument and date range for `GET /api/v1/candles`. It also loads
+macro dataset definitions and observations from the macro API endpoints. The
+charts are drawn with SVG so the mapping from API values to screen coordinates
+is visible.
