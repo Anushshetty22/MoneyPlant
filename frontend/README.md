@@ -11,6 +11,8 @@ This step creates:
 - A server-side API client in `src/lib/api.ts`
 - A first page that displays active instruments
 - Loading-error and empty-data states
+- A same-origin proxy for browser-side API requests
+- Interactive daily closing-price and volume charts
 
 ## Run locally
 
@@ -33,6 +35,6 @@ npm run dev
 
 Open `http://localhost:3000` in a browser.
 
-The first page requests `GET /api/v1/instruments` from the Go API and displays
-the instruments returned by PostgreSQL. Charts and interactive filters are part
-of the next frontend sub-phases.
+The first page requests `GET /api/v1/instruments` from the Go API and then lets
+you select an instrument and date range for `GET /api/v1/candles`. The chart is
+drawn with SVG so the mapping from API values to screen coordinates is visible.
