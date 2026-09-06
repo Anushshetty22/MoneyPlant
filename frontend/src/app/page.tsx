@@ -40,9 +40,22 @@ export default async function Home() {
             </p>
           </div>
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
-            <span className="font-medium text-slate-800">Phase 7.3</span> · Market and macro views
+            <span className="font-medium text-slate-800">Phase 7.4</span> · Dashboard usability
           </div>
         </header>
+
+        {/* Phase 7.4 update: provide visible in-page navigation so the growing
+            dashboard remains easy to scan on both desktop and mobile screens. */}
+        <nav aria-label="Dashboard sections" className="sticky top-0 z-10 -mx-6 mt-4 border-b border-slate-200 bg-paper/95 px-6 py-3 backdrop-blur sm:-mx-10 sm:px-10 lg:-mx-16 lg:px-16">
+          <div className="mx-auto flex max-w-6xl gap-2 overflow-x-auto text-sm">
+            <a href="#market-view" className="shrink-0 rounded-full px-4 py-2 font-medium text-slate-600 transition hover:bg-white hover:text-growth">
+              Market data
+            </a>
+            <a href="#macro-view" className="shrink-0 rounded-full px-4 py-2 font-medium text-slate-600 transition hover:bg-white hover:text-growth">
+              Macro indicators
+            </a>
+          </div>
+        </nav>
 
         {loadError ? (
           <section className="mt-10">

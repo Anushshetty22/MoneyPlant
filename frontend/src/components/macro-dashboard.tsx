@@ -8,6 +8,15 @@ import {
   type MacroObservation
 } from "@/lib/api";
 
+// formatRetrievedAt makes source freshness understandable without hiding the
+// exact ISO timestamp, which remains available through the title attribute.
+function formatRetrievedAt(value: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(new Date(value));
+}
+
 // MacroLineChart maps date/value observations to SVG coordinates. The chart is
 // intentionally similar to the market chart so the learner can compare the
 // visualization pattern while seeing that macro data uses dates rather than
@@ -139,7 +148,7 @@ export default function MacroDashboard() {
   const isLoading = isLoadingDatasets || isLoadingObservations;
 
   return (
-    <section className="mt-10">
+    <section id="macro-view" className="mt-10 scroll-mt-20">
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -179,6 +188,7 @@ export default function MacroDashboard() {
             <span>Provider: <strong className="font-medium text-slate-700">{selectedDataset.provider}</strong></span>
             <span>Unit: <strong className="font-medium text-slate-700">{selectedDataset.unit}</strong></span>
             <span>Frequency: <strong className="font-medium text-slate-700">{selectedDataset.frequency}</strong></span>
+            <span title={selectedDataset.retrieved_at}>Dataset retrieved: <strong className="font-medium text-slate-700">{formatRetrievedAt(selectedDataset.retrieved_at)}</strong></span>
             <a href={selectedDataset.source_url} target="_blank" rel="noreferrer" className="font-medium text-growth underline">
               View source
             </a>
@@ -201,7 +211,14 @@ export default function MacroDashboard() {
           <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
             <div>
               <h3 className="text-xl font-semibold text-ink">{selectedDataset?.name}</h3>
-              <p className="mt-1 text-sm text-slate-500">Latest value: {observations[observations.length - 1]?.value} {selectedDataset?.unit}</p>
+              <p className="mt-1 text-sm text-slate-500">
+                Latest value: {observations[observations.length - 1]?.value} {selectedDataset?.unit}
+                {observations[observations.length - 1]?.source_retrieved_at && (
+                  <span title={observations[observations.length - 1].source_retrieved_at}>
+                    {" · Retrieved "}{formatRetrievedAt(observations[observations.length - 1].source_retrieved_at)}
+                  </span>
+                )}
+              </p>
             </div>
             <p className="text-sm text-slate-500">{observations.length} observation{observations.length === 1 ? "" : "s"}</p>
           </div>
@@ -211,4 +228,3 @@ export default function MacroDashboard() {
     </section>
   );
 }
-

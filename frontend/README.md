@@ -14,6 +14,7 @@ This step creates:
 - A same-origin proxy for browser-side API requests
 - Interactive daily closing-price and volume charts
 - Macro dataset selection and date-filtered time-series charts
+- In-page navigation and source/retrieval context
 
 ## Run locally
 

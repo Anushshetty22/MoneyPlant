@@ -10,6 +10,16 @@ function providerForInstrument(instrument: Instrument): string {
   return instrument.asset_type === "crypto" ? "binance" : "yahoo";
 }
 
+// formatRetrievedAt turns the machine timestamp from the API into a readable
+// local-time label. The original UTC value remains available in the HTML title
+// attribute for users who need the exact retrieval instant.
+function formatRetrievedAt(value: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(new Date(value));
+}
+
 // PriceChart turns close-price strings into SVG coordinates. SVG is used here
 // intentionally so the learner can see the chart fundamentals instead of only
 // configuring a third-party chart library.
@@ -155,7 +165,7 @@ export default function MarketDashboard({ instruments }: { instruments: Instrume
   }, [from, selectedInstrument, to]);
 
   return (
-    <section className="mt-10">
+    <section id="market-view" className="mt-10 scroll-mt-20">
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -191,9 +201,16 @@ export default function MarketDashboard({ instruments }: { instruments: Instrume
         </div>
 
         {selectedInstrument && (
-          <p className="mt-5 text-xs text-slate-500">
-            Source: <span className="font-medium text-slate-700">{providerForInstrument(selectedInstrument)}</span> · Interval: <span className="font-medium text-slate-700">1d</span> · Times are UTC
-          </p>
+          <div className="mt-5 flex flex-col gap-2 border-t border-slate-100 pt-4 text-xs text-slate-500 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5">
+            <span>Source: <strong className="font-medium text-slate-700">{providerForInstrument(selectedInstrument)}</strong></span>
+            <span>Interval: <strong className="font-medium text-slate-700">1d</strong></span>
+            <span>Times are UTC</span>
+            {candles.length > 0 && (
+              <span title={candles[candles.length - 1].source_retrieved_at}>
+                Retrieved: <strong className="font-medium text-slate-700">{formatRetrievedAt(candles[candles.length - 1].source_retrieved_at)}</strong>
+              </span>
+            )}
+          </div>
         )}
       </div>
 
@@ -216,4 +233,3 @@ export default function MarketDashboard({ instruments }: { instruments: Instrume
     </section>
   );
 }
-

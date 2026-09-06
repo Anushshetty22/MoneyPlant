@@ -18,3 +18,10 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Phase 7.4 update: make keyboard focus visible when navigating the dashboard
+   with a keyboard or assistive technology. */
+:focus-visible {
+  outline: 3px solid #14b8a6;
+  outline-offset: 3px;
+}
