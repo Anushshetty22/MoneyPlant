@@ -88,3 +88,19 @@ go test ./internal/ingestion -v
 
 The reconnect wrapper does not persist live events or expose them through the
 API yet. Those responsibilities remain separate future steps.
+
+## Phase 2.4 live snapshot store
+
+`LiveMarketSnapshotStore` keeps the latest valid event for each provider symbol
+in a thread-safe in-memory map. It can be passed directly as the
+`LiveMarketEventHandler` for `LiveMarketMonitor`.
+
+The store currently supports latest-value reads and deterministic listing. It
+does not replace the historical PostgreSQL candle model; durable live-tick
+storage and API exposure remain later design steps.
+
+For concurrency verification, run:
+
+```bash
+go test -race ./internal/ingestion
+```
