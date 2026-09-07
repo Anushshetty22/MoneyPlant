@@ -18,7 +18,7 @@ every step.
 
 From the repository root:
 
-1. Start the PostgreSQL container.
+1. Start PostgreSQL with `docker compose -f infra/compose.yaml up -d`.
 2. Confirm the container exposes port `5432`.
 3. Confirm the `psql` client is installed.
 4. Confirm the database, user, and password match `.env.example`.
@@ -33,6 +33,10 @@ go test ./...
 The test suite uses local fakes and should not require API credentials.
 
 ## 3. Create the database schema on a fresh database
+
+The Compose setup automatically applies the numbered migrations when its named
+volume is initialized for the first time. If you use an existing database or a
+manual PostgreSQL installation, apply the files in order with the command below.
 
 The migration files are numbered and must be applied in order. Run this from
 the repository root against a fresh `moneyplant` database:

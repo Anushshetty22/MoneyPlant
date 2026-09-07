@@ -21,7 +21,12 @@ The Next.js application is a read-only presentation layer. It calls the Go API a
 
 ### Docker Compose
 
-Docker Compose will run PostgreSQL and, later, the backend and frontend. Persistent database storage must use a named volume so container restarts do not remove data.
+In Phase 2.1, Docker Compose runs PostgreSQL with a named volume, a health
+check, and the ordered SQL migrations mounted into the official image's
+first-start initialization directory. The backend and frontend continue to run
+as local developer processes for now; they can be added as later Compose
+services without changing the database boundary. Persistent database storage
+must use a named volume so container restarts do not remove data.
 
 ## Design principles
 
@@ -48,4 +53,3 @@ Provider adapters -> Normalization/validation -> Repository -> PostgreSQL
 
 PostgreSQL -> Go query handlers -> JSON REST API -> Next.js charts
 ```
-

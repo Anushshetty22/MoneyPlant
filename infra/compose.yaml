@@ -1,0 +1,40 @@
+name: moneyplant
+
+services:
+  postgres:
+    # Keep the container name stable because the runbook and local tooling use
+    # it when checking whether PostgreSQL is running.
+    container_name: moneyplant-postgres
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      # The ${...:-...} form lets a developer use .env overrides while still
+      # making a fresh clone work with the documented local defaults.
+      POSTGRES_DB: ${POSTGRES_DB:-moneyplant}
+      POSTGRES_USER: ${POSTGRES_USER:-moneyplant}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-locally}
+    ports:
+      # Only PostgreSQL is exposed to the host in Phase 2.1. The API and
+      # frontend continue to run with `go run` and `npm run dev` for now.
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # A named volume keeps database rows when the container is recreated.
+      # PostgreSQL 18 stores PGDATA below /var/lib/postgresql/18/docker, so
+      # mount the parent directory. This also matches the official image's
+      # PostgreSQL 18 volume layout and keeps the whole cluster persistent.
+      - postgres-data:/var/lib/postgresql
+      # PostgreSQL runs these files alphabetically, once, on a new data volume.
+      # The numbered migrations therefore create the schema in dependency order.
+      - ../db/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # $$ defers variable expansion to the container, where the POSTGRES_*
+      # environment variables are available to pg_isready.
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+volumes:
+  postgres-data:
+    name: moneyplant-postgres-data

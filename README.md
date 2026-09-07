@@ -4,9 +4,10 @@ MoneyPlant is a local-first financial data engineering and analytics project. It
 
 ## Current milestone
 
-Phase 1 development and Phase 8 integration are complete. The project is
-intentionally implemented incrementally, with each sub-phase producing a
-testable result and a short learning checkpoint.
+Phase 1 development and Phase 8 integration are complete, and Phase 2.1
+infrastructure work is now in progress. The project is intentionally
+implemented incrementally, with each sub-phase producing a testable result and
+a short learning checkpoint.
 
 ## Current progress
 
@@ -15,6 +16,8 @@ testable result and a short learning checkpoint.
 - Yahoo Finance NSE EOD fallback ingestion is working.
 - CPI and RBI repo-rate CSV seeding is working with learning fixtures.
 - Angel One integration is deferred until API setup is available.
+- PostgreSQL now has a Docker Compose definition with persistent storage,
+  health checks, and first-start migration initialization.
 
 See [`docs/project-guide.md`](docs/project-guide.md) for the consolidated
 setup, architecture, database, API, troubleshooting, and Phase 2 guide.

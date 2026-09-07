@@ -13,6 +13,7 @@ Use this file as a running project notebook. Keep entries short and practical.
 - REST API design
 - Next.js App Router and client-side data fetching
 - Time-series data and timezone normalization
+- WebSocket streams, context cancellation, callbacks, and reconnect boundaries
 
 ## Commands learned
 
@@ -21,6 +22,7 @@ Use this file as a running project notebook. Keep entries short and practical.
 | `git status` | Shows repository changes | `git status --short` |
 | `go version` | Shows the installed Go version | `go version` |
 | `node --version` | Shows the installed Node.js version | `node --version` |
+| `docker compose ...` | Starts or inspects the local multi-container setup | `docker compose -f infra/compose.yaml up -d` |
 
 ## Decision log
 
@@ -28,6 +30,8 @@ Use this file as a running project notebook. Keep entries short and practical.
 |---|---|---|
 | 2026-08-07 | Start with a small configurable data universe | Easier to test and understand before scaling |
 | 2026-08-07 | Research data sources before finalizing the schema | Source shape and limitations affect the warehouse design |
+| 2026-09-06 | Use PostgreSQL initialization mounts for local Phase 2.1 setup | The numbered migrations already express dependency order, and a named volume preserves local data across restarts |
+| 2026-09-06 | Define and test a provider-neutral live stream before adding Binance WebSocket transport | A fixture can prove event validation and cancellation without credentials, network access, or provider protocol details |
 
 ## Problems and solutions
 
@@ -39,4 +43,3 @@ What I tried:
 What worked:
 What I learned:
 ```
-

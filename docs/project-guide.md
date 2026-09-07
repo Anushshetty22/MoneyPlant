@@ -91,6 +91,13 @@ times, loading states, empty states, and error states.
 
 ### Start PostgreSQL
 
+From the repository root, start the Phase 2.1 PostgreSQL service with:
+
+```bash
+docker compose -f infra/compose.yaml up -d
+docker compose -f infra/compose.yaml ps
+```
+
 The expected local container is named `moneyplant-postgres` and exposes port
 `5432`. Confirm it is running with:
 
@@ -109,7 +116,19 @@ port: 5432
 
 ### Create the schema
 
-On a fresh database, run the numbered migrations from the repository root:
+When PostgreSQL is started with the Phase 2.1 Compose file, the numbered
+migrations are mounted into the official image's initialization directory and
+run automatically on a new `moneyplant-postgres-data` volume. Confirm the
+definitions with:
+
+```bash
+PGPASSWORD=change-me-locally psql \
+  -h localhost -p 5432 -U moneyplant -d moneyplant \
+  -c "SELECT canonical_symbol FROM instruments ORDER BY id;"
+```
+
+For a manual PostgreSQL installation or a deliberately fresh database, the
+ordered migration loop remains available from the repository root:
 
 ```bash
 for migration in db/migrations/[0-9]*.sql; do
@@ -322,7 +341,13 @@ The more detailed command-by-command workflow is in
   tracking table yet.
 - The project does not provide investment advice or automated trading.
 
-## 11. Phase 2 preparation
+## 11. Phase 2 status and preparation
+
+Phase 2.1 is in progress. The repository now includes
+`infra/compose.yaml`, which runs PostgreSQL with a named volume, a health
+check, and automatic first-start execution of the ordered migrations. The
+backend and frontend remain local developer processes in this first
+infrastructure slice.
 
 The next planned capabilities are:
 
