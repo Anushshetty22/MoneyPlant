@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/Anushshetty22/MoneyPlant/backend/internal/database"
+	"github.com/Anushshetty22/MoneyPlant/backend/internal/ingestion"
 )
 
 // NewServer creates the configured HTTP server used by cmd/api/main.go.
@@ -39,6 +40,7 @@ func NewServer(
 	macroDatasetRepository *database.MacroDatasetRepository,
 	macroObservationRepository *database.MacroObservationRepository,
 	ingestionRunRepository *database.IngestionRunRepository,
+	liveSnapshotStore *ingestion.LiveMarketSnapshotStore,
 ) *http.Server {
 	// ServeMux maps an incoming HTTP method and path to a handler function.
 	// The health route is the first endpoint because it gives us a small,
@@ -73,6 +75,13 @@ func NewServer(
 	// inspect pipeline outcomes and row counts without querying PostgreSQL.
 	mux.HandleFunc("GET /api/v1/ingestion-runs", func(responseWriter http.ResponseWriter, request *http.Request) {
 		listIngestionRunsHandler(responseWriter, request, ingestionRunRepository)
+	})
+
+	// Phase 2.6 update: expose the latest in-memory live event snapshots. The
+	// store is optional so the existing API can still start when live monitoring
+	// has not been enabled through LIVE_MONITOR_SYMBOL.
+	mux.HandleFunc("GET /api/v1/live/snapshots", func(responseWriter http.ResponseWriter, request *http.Request) {
+		listLiveSnapshotsHandler(responseWriter, request, liveSnapshotStore)
 	})
 
 	// The middleware surrounds every registered route. This means future routes

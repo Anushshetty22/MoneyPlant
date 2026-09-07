@@ -22,6 +22,7 @@ import (
 	"github.com/Anushshetty22/MoneyPlant/backend/internal/config"
 	"github.com/Anushshetty22/MoneyPlant/backend/internal/database"
 	"github.com/Anushshetty22/MoneyPlant/backend/internal/httpapi"
+	"github.com/Anushshetty22/MoneyPlant/backend/internal/ingestion"
 )
 
 // TestReadOnlyAPIIntegration verifies the complete read-only HTTP surface using
@@ -64,6 +65,7 @@ func TestReadOnlyAPIIntegration(t *testing.T) {
 		database.NewMacroDatasetRepository(pool),
 		database.NewMacroObservationRepository(pool),
 		database.NewIngestionRunRepository(pool),
+		ingestion.NewLiveMarketSnapshotStore(),
 	)
 
 	// httptest.NewServer uses an ephemeral local port and serves the exact Handler

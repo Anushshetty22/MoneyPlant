@@ -278,6 +278,18 @@ The `provider` filter is optional. `limit` defaults to 20 and accepts values
 from 1 through 100. Results include status, requested range, row counts,
 errors, and scope details.
 
+### Live snapshots
+
+```text
+GET /api/v1/live/snapshots?symbol=BTCUSDT
+```
+
+The `symbol` filter is optional. The endpoint returns the latest in-memory live
+event for each monitored symbol, with exact price and quantity values encoded
+as JSON strings. Live monitoring is opt-in through `LIVE_MONITOR_SYMBOL`; when
+it is empty, the endpoint remains available and returns an empty `data` array.
+These snapshots are process memory only and are not historical PostgreSQL data.
+
 ## 8. Database design summary
 
 | Table | Stores | Important rule |
@@ -343,15 +355,18 @@ The more detailed command-by-command workflow is in
 
 ## 11. Phase 2 status and preparation
 
-Phase 2.1 is in progress. The repository now includes
+Phase 2.6 is in progress. The repository now includes
 `infra/compose.yaml`, which runs PostgreSQL with a named volume, a health
 check, and automatic first-start execution of the ordered migrations. The
 backend and frontend remain local developer processes in this first
 infrastructure slice.
 
+The Phase 2 live path now includes a provider-neutral stream contract, a
+Binance trade adapter, bounded reconnects, an in-memory latest-event store, a
+runnable monitor command, and an optional API endpoint for live snapshots.
+
 The next planned capabilities are:
 
-- WebSocket ingestion and live monitoring.
 - More robust scheduling and operational monitoring.
 - Local LLM and Text-to-SQL exploration.
 - Personal-finance CSV ingestion and categorization.

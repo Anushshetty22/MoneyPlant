@@ -27,6 +27,12 @@ type Config struct {
 	PostgresDatabase string
 	PostgresUser     string
 	PostgresPassword string
+
+	// Live monitoring is opt-in. An empty symbol keeps the API in its existing
+	// Phase 1 behavior without opening a network stream.
+	LiveMonitorSymbol       string
+	LiveMonitorMaxRetries   int
+	LiveMonitorWebSocketURL string
 }
 
 // Load reads configuration from environment variables and applies local-development defaults.
@@ -49,19 +55,29 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	liveMonitorMaxRetries, err := getInt("LIVE_MONITOR_MAX_RETRIES", 3)
+	if err != nil {
+		return Config{}, err
+	}
+	if liveMonitorMaxRetries < 0 {
+		return Config{}, fmt.Errorf("LIVE_MONITOR_MAX_RETRIES cannot be negative")
+	}
 
 	// Assemble all successfully parsed values into one configuration object.
 	// getString checks the environment first and uses the fallback when the
 	// variable is missing or empty, making local development easy while still
 	// allowing deployment environments to provide their own values.
 	config := Config{
-		APIHost:          getString("API_HOST", "0.0.0.0"),
-		APIPort:          apiPort,
-		PostgresHost:     getString("POSTGRES_HOST", "localhost"),
-		PostgresPort:     postgresPort,
-		PostgresDatabase: getString("POSTGRES_DB", "moneyplant"),
-		PostgresUser:     getString("POSTGRES_USER", "moneyplant"),
-		PostgresPassword: getString("POSTGRES_PASSWORD", "change-me-locally"),
+		APIHost:                 getString("API_HOST", "0.0.0.0"),
+		APIPort:                 apiPort,
+		PostgresHost:            getString("POSTGRES_HOST", "localhost"),
+		PostgresPort:            postgresPort,
+		PostgresDatabase:        getString("POSTGRES_DB", "moneyplant"),
+		PostgresUser:            getString("POSTGRES_USER", "moneyplant"),
+		PostgresPassword:        getString("POSTGRES_PASSWORD", "change-me-locally"),
+		LiveMonitorSymbol:       getString("LIVE_MONITOR_SYMBOL", ""),
+		LiveMonitorMaxRetries:   liveMonitorMaxRetries,
+		LiveMonitorWebSocketURL: getString("LIVE_MONITOR_WS_URL", "wss://stream.binance.com:9443"),
 	}
 
 	// Validate the completed configuration before returning it. This is the final

@@ -119,3 +119,27 @@ go run ./cmd/monitor-binance \
 
 The command uses public Binance market data and does not require API keys. It
 does not persist live events to PostgreSQL yet.
+
+## Phase 2.6 live snapshot API
+
+The API can now expose the latest in-memory live event through a read-only
+endpoint. Live monitoring is opt-in: leave `LIVE_MONITOR_SYMBOL` empty to run
+the API without opening a WebSocket connection, or set it before startup:
+
+```bash
+LIVE_MONITOR_SYMBOL=BTCUSDT go run ./cmd/api
+```
+
+While the API is running, query all available symbol snapshots or filter one
+symbol from another terminal:
+
+```bash
+curl http://localhost:8080/api/v1/live/snapshots
+curl 'http://localhost:8080/api/v1/live/snapshots?symbol=BTCUSDT'
+```
+
+The endpoint returns an empty `data` array when monitoring is disabled or when
+the requested symbol has not received an event yet. Prices and quantities stay
+JSON strings so exact decimal precision is preserved. These snapshots are
+memory-only and disappear when the API process stops; historical candles still
+come from PostgreSQL.

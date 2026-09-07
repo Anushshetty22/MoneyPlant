@@ -25,6 +25,7 @@ import (
 	"github.com/Anushshetty22/MoneyPlant/backend/internal/config"
 	"github.com/Anushshetty22/MoneyPlant/backend/internal/database"
 	"github.com/Anushshetty22/MoneyPlant/backend/internal/httpapi"
+	"github.com/Anushshetty22/MoneyPlant/backend/internal/ingestion"
 )
 
 // main is the first function executed when the API program starts.
@@ -95,6 +96,14 @@ func main() {
 	// provider status, row counts, requested ranges, and failure messages.
 	ingestionRunRepository := database.NewIngestionRunRepository(databasePool)
 
+	// Phase 2.6 update: create one in-memory snapshot store shared by the
+	// optional live monitor and the HTTP API. The store is harmless when live
+	// monitoring is disabled because it simply remains empty.
+	liveSnapshotStore := ingestion.NewLiveMarketSnapshotStore()
+	liveMonitorContext, cancelLiveMonitor := context.WithCancel(context.Background())
+	defer cancelLiveMonitor()
+	startOptionalLiveMonitor(liveMonitorContext, cfg, liveSnapshotStore)
+
 	// Phase 6.1 update: construct the HTTP server after configuration and database
 	// startup have succeeded. This ordering prevents the API from accepting
 	// requests while a required backend dependency is unavailable.
@@ -106,6 +115,7 @@ func main() {
 		macroDatasetRepository,
 		macroObservationRepository,
 		ingestionRunRepository,
+		liveSnapshotStore,
 	)
 
 	// Phase 6.1 update: run ListenAndServe in a goroutine so main can wait for
@@ -138,6 +148,10 @@ func main() {
 		log.Printf("shutdown signal received: %s", shutdownSignal)
 	}
 
+	// Stop the optional live stream before shutting down the HTTP server so its
+	// WebSocket connection and reconnect backoff are released promptly.
+	cancelLiveMonitor()
+
 	// Phase 6.1 update: give active HTTP requests five seconds to finish before
 	// forcefully closing connections. Shutdown does not accept new requests and
 	// returns once existing handlers complete or the deadline expires.
@@ -146,4 +160,51 @@ func main() {
 	if err := apiServer.Shutdown(shutdownContext); err != nil {
 		log.Printf("HTTP server shutdown error: %v", err)
 	}
+}
+
+// startOptionalLiveMonitor starts live monitoring only when the symbol setting
+// is non-empty. Keeping setup in a background goroutine means a temporary
+// Binance outage does not prevent the read-only API from starting.
+func startOptionalLiveMonitor(
+	ctx context.Context,
+	cfg config.Config,
+	store *ingestion.LiveMarketSnapshotStore,
+) {
+	if cfg.LiveMonitorSymbol == "" {
+		log.Printf("live monitor disabled; set LIVE_MONITOR_SYMBOL to enable it")
+		return
+	}
+
+	go func() {
+		provider, err := ingestion.NewBinanceLiveMarketDataProvider(nil, cfg.LiveMonitorWebSocketURL)
+		if err != nil {
+			log.Printf("live monitor configuration error: %v", err)
+			return
+		}
+
+		policy := ingestion.DefaultLiveReconnectPolicy()
+		policy.MaxRetries = cfg.LiveMonitorMaxRetries
+		stream, err := ingestion.NewReconnectingLiveMarketStream(
+			provider,
+			ingestion.LiveMarketStreamRequest{ProviderSymbol: cfg.LiveMonitorSymbol},
+			policy,
+		)
+		if err != nil {
+			log.Printf("live monitor setup error: %v", err)
+			return
+		}
+		defer stream.Close()
+
+		monitor, err := ingestion.NewLiveMarketMonitor(stream)
+		if err != nil {
+			log.Printf("live monitor creation error: %v", err)
+			return
+		}
+
+		result, err := monitor.Run(ctx, store.Handle)
+		if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+			log.Printf("live monitor stopped with error: %v", err)
+		}
+		log.Printf("live monitor summary: received=%d accepted=%d rejected=%d snapshots=%d", result.Received, result.Accepted, result.Rejected, store.Count())
+	}()
 }

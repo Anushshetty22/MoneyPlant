@@ -36,6 +36,7 @@ Use this file as a running project notebook. Keep entries short and practical.
 | 2026-09-07 | Add bounded reconnects around the live stream instead of embedding retries in the Binance decoder | Transport recovery, event decoding, and event handling remain separate responsibilities and can be tested independently |
 | 2026-09-07 | Keep the latest live event in a locked in-memory snapshot store before designing durable tick storage | This makes live state observable while keeping high-volume streaming data separate from the Phase 1 historical candle schema |
 | 2026-09-08 | Add a bounded `monitor-binance` command before adding persistence or API endpoints | A runnable command makes the complete live flow testable while keeping database and HTTP design decisions separate |
+| 2026-09-08 | Expose live snapshots through the existing API only when `LIVE_MONITOR_SYMBOL` is set | The Phase 1 read API remains usable without a WebSocket, while live monitoring becomes observable through a normal HTTP request |
 
 ## Problems and solutions
 
