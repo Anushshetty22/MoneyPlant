@@ -104,3 +104,18 @@ For concurrency verification, run:
 ```bash
 go test -race ./internal/ingestion
 ```
+
+## Phase 2.5 runnable live monitor
+
+The `monitor-binance` command connects the Binance adapter, reconnecting stream,
+monitor, and snapshot store. It prints each accepted trade and stops when you
+press Ctrl+C. Use `--events` for a bounded manual test:
+
+```bash
+go run ./cmd/monitor-binance \
+  --symbol BTCUSDT \
+  --events 3
+```
+
+The command uses public Binance market data and does not require API keys. It
+does not persist live events to PostgreSQL yet.
