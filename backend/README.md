@@ -72,3 +72,19 @@ go test ./internal/ingestion -v
 Reconnect policy, live-tick persistence, and API/dashboard monitoring are later
 Phase 2 steps. This adapter currently focuses on connection, decoding, and
 normalization.
+
+## Phase 2.3 reconnect policy
+
+`ReconnectingLiveMarketStream` wraps the Binance adapter and retries failed
+connections with bounded exponential backoff. The policy supports context
+cancellation and injectable sleeping, which keeps retry tests fast and
+deterministic.
+
+Run the focused tests with:
+
+```bash
+go test ./internal/ingestion -v
+```
+
+The reconnect wrapper does not persist live events or expose them through the
+API yet. Those responsibilities remain separate future steps.
