@@ -54,3 +54,21 @@ observations by dataset and date, and records a `macro_seed` ingestion run.
 For the complete Phase 1 execution order, verification queries, repeat-run
 behavior, and troubleshooting guidance, see
 [`docs/ingestion-runbook.md`](../docs/ingestion-runbook.md).
+
+## Phase 2.2 Binance live trade stream
+
+The first live-stream adapter opens Binance's public Spot raw trade stream for
+one symbol and converts each provider message into the normalized
+`ingestion.LiveMarketEvent` contract. The adapter uses the documented
+`<symbol>@trade` URL format and keeps provider decimal strings exact.
+
+The adapter is tested against an in-process WebSocket server, so the test does
+not require Binance access or credentials:
+
+```bash
+go test ./internal/ingestion -v
+```
+
+Reconnect policy, live-tick persistence, and API/dashboard monitoring are later
+Phase 2 steps. This adapter currently focuses on connection, decoding, and
+normalization.

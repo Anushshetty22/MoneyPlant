@@ -32,6 +32,7 @@ Use this file as a running project notebook. Keep entries short and practical.
 | 2026-08-07 | Research data sources before finalizing the schema | Source shape and limitations affect the warehouse design |
 | 2026-09-06 | Use PostgreSQL initialization mounts for local Phase 2.1 setup | The numbered migrations already express dependency order, and a named volume preserves local data across restarts |
 | 2026-09-06 | Define and test a provider-neutral live stream before adding Binance WebSocket transport | A fixture can prove event validation and cancellation without credentials, network access, or provider protocol details |
+| 2026-09-07 | Map Binance's raw `<symbol>@trade` stream into the normalized event contract | The adapter owns lowercase URL symbols and provider JSON fields while the monitor stays provider-independent |
 
 ## Problems and solutions
 
