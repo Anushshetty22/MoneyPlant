@@ -26,6 +26,7 @@ import (
 	"github.com/Anushshetty22/MoneyPlant/backend/internal/database"
 	"github.com/Anushshetty22/MoneyPlant/backend/internal/httpapi"
 	"github.com/Anushshetty22/MoneyPlant/backend/internal/ingestion"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // main is the first function executed when the API program starts.
@@ -95,15 +96,22 @@ func main() {
 	// Phase 6.2 update: create the ingestion-run repository so the API can expose
 	// provider status, row counts, requested ranges, and failure messages.
 	ingestionRunRepository := database.NewIngestionRunRepository(databasePool)
+	// Phase 2.12 update: create the durable latest-live-snapshot repository.
+	// It uses the same shared pool and stores one current value per provider
+	// symbol rather than writing every raw trade as a historical tick.
+	liveMarketSnapshotRepository := database.NewLiveMarketSnapshotRepository(databasePool)
 
 	// Phase 2.6 update: create one in-memory snapshot store shared by the
 	// optional live monitor and the HTTP API. The store is harmless when live
 	// monitoring is disabled because it simply remains empty.
 	liveSnapshotStore := ingestion.NewLiveMarketSnapshotStore()
 	liveMonitorStatusStore := ingestion.NewLiveMonitorStatusStore()
+	restoreContext, cancelRestore := context.WithTimeout(context.Background(), 3*time.Second)
+	restoreDurableLiveSnapshots(restoreContext, liveMarketSnapshotRepository, liveSnapshotStore)
+	cancelRestore()
 	liveMonitorContext, cancelLiveMonitor := context.WithCancel(context.Background())
 	defer cancelLiveMonitor()
-	startOptionalLiveMonitor(liveMonitorContext, cfg, liveSnapshotStore, liveMonitorStatusStore)
+	startOptionalLiveMonitor(liveMonitorContext, cfg, liveSnapshotStore, liveMonitorStatusStore, liveMarketSnapshotRepository)
 
 	// Phase 6.1 update: construct the HTTP server after configuration and database
 	// startup have succeeded. This ordering prevents the API from accepting
@@ -172,6 +180,7 @@ func startOptionalLiveMonitor(
 	cfg config.Config,
 	store *ingestion.LiveMarketSnapshotStore,
 	statusStore *ingestion.LiveMonitorStatusStore,
+	snapshotRepository *database.LiveMarketSnapshotRepository,
 ) {
 	if cfg.LiveMonitorSymbol == "" {
 		log.Printf("live monitor disabled; set LIVE_MONITOR_SYMBOL to enable it")
@@ -212,18 +221,84 @@ func startOptionalLiveMonitor(
 		}
 
 		statusStore.MarkRunning()
+		var lastPersistenceAttemptAt time.Time
 		handleEvent := func(eventContext context.Context, event ingestion.LiveMarketEvent) error {
 			if err := store.Handle(eventContext, event); err != nil {
 				return err
 			}
 			statusStore.RecordAccepted(event)
+			// Persist at most once every five seconds during the open-ended
+			// stream. The in-memory store remains current for every event, while
+			// PostgreSQL receives a restart-safe latest value without one write
+			// per trade.
+			if lastPersistenceAttemptAt.IsZero() || time.Since(lastPersistenceAttemptAt) >= 5*time.Second {
+				lastPersistenceAttemptAt = time.Now()
+				if err := persistLiveSnapshot(eventContext, snapshotRepository, event); err != nil {
+					log.Printf("persist live snapshot: %v", err)
+				}
+			}
 			return nil
 		}
 		result, err := monitor.Run(ctx, handleEvent)
+		if result.LastEvent != nil {
+			persistContext, cancelPersist := context.WithTimeout(context.Background(), 2*time.Second)
+			if persistErr := persistLiveSnapshot(persistContext, snapshotRepository, *result.LastEvent); persistErr != nil {
+				log.Printf("persist final live snapshot: %v", persistErr)
+			}
+			cancelPersist()
+		}
 		statusStore.RecordResult(result, err)
 		if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
 			log.Printf("live monitor stopped with error: %v", err)
 		}
 		log.Printf("live monitor summary: received=%d accepted=%d rejected=%d snapshots=%d", result.Received, result.Accepted, result.Rejected, store.Count())
 	}()
+}
+
+// restoreDurableLiveSnapshots seeds the fast in-memory store from PostgreSQL
+// before the API begins serving requests. A missing Phase 2.12 migration is
+// logged but does not prevent the live API from starting for local learning.
+func restoreDurableLiveSnapshots(
+	ctx context.Context,
+	repository *database.LiveMarketSnapshotRepository,
+	store *ingestion.LiveMarketSnapshotStore,
+) {
+	rows, err := repository.List(ctx)
+	if err != nil {
+		log.Printf("restore durable live snapshots: %v", err)
+		return
+	}
+	for _, row := range rows {
+		event := ingestion.LiveMarketEvent{
+			ProviderSymbol:   row.ProviderSymbol,
+			EventType:        row.EventType,
+			ObservedAt:       row.ObservedAt.Time,
+			Price:            row.Price,
+			Quantity:         row.Quantity,
+			SourceReceivedAt: row.SourceReceivedAt.Time,
+		}
+		if err := store.Handle(ctx, event); err != nil {
+			log.Printf("restore durable live snapshot for %s: %v", row.ProviderSymbol, err)
+		}
+	}
+	if len(rows) > 0 {
+		log.Printf("restored %d durable live snapshot(s)", len(rows))
+	}
+}
+
+func persistLiveSnapshot(
+	ctx context.Context,
+	repository *database.LiveMarketSnapshotRepository,
+	event ingestion.LiveMarketEvent,
+) error {
+	_, err := repository.Upsert(ctx, database.LiveMarketSnapshotInput{
+		Provider:         "binance",
+		ProviderSymbol:   event.ProviderSymbol,
+		EventType:        event.EventType,
+		ObservedAt:       pgtype.Timestamptz{Time: event.ObservedAt, Valid: true},
+		Price:            event.Price,
+		Quantity:         event.Quantity,
+		SourceReceivedAt: pgtype.Timestamptz{Time: event.SourceReceivedAt, Valid: true},
+	})
+	return err
 }

@@ -24,7 +24,7 @@ The design does not store live ticks, order books, orders, holdings, account bal
 
 ## 3. High-level model
 
-The design has six tables. Four are the main domain tables and two are supporting reference tables.
+The design has seven tables. Five are the main domain tables and two are supporting reference tables.
 
 1. `instruments` stores canonical asset identities.
 2. `instrument_sources` stores provider-specific symbols, tokens, and source metadata.
@@ -32,6 +32,7 @@ The design has six tables. Four are the main domain tables and two are supportin
 4. `macro_datasets` stores the definition and provenance of CPI and repo-rate series.
 5. `macro_observations` stores dated numeric observations for those series.
 6. `ingestion_runs` stores the audit record for every collection attempt.
+7. `live_market_snapshots` stores one restart-safe latest live value per provider symbol.
 
 The two supporting tables are necessary because the same canonical instrument can have different identifiers at different providers, and a macro observation needs a stable dataset definition rather than repeating CPI or repo-rate metadata on every row.
 

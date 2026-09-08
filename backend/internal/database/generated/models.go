@@ -52,6 +52,19 @@ type InstrumentSource struct {
 	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
 }
 
+type LiveMarketSnapshot struct {
+	ID               int64              `json:"id"`
+	Provider         string             `json:"provider"`
+	ProviderSymbol   string             `json:"provider_symbol"`
+	EventType        string             `json:"event_type"`
+	ObservedAt       pgtype.Timestamptz `json:"observed_at"`
+	Price            pgtype.Numeric     `json:"price"`
+	Quantity         pgtype.Numeric     `json:"quantity"`
+	SourceReceivedAt pgtype.Timestamptz `json:"source_received_at"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
 type MacroDataset struct {
 	ID              int64              `json:"id"`
 	Code            string             `json:"code"`

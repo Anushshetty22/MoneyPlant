@@ -176,3 +176,19 @@ The reconnecting stream now accepts an optional retry callback. The API monitor
 uses it to increment `reconnects` whenever a failed connection will be retried.
 This keeps retry policy separate from monitoring while making transient network
 instability visible in the status endpoint and dashboard.
+
+## Phase 2.12 durable latest live snapshot
+
+The API now upserts the latest live value per provider symbol into the
+`live_market_snapshots` table. It does not archive every raw trade. When the
+API starts, it restores the durable latest values into the in-memory store
+before the optional WebSocket monitor begins.
+
+For an existing PostgreSQL volume, apply the new migration once from the
+repository root:
+
+```bash
+PGPASSWORD=change-me-locally psql \
+  -h localhost -p 5432 -U moneyplant -d moneyplant \
+  -f db/migrations/008_create_live_market_snapshots.sql
+```

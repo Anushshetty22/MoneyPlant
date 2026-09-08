@@ -42,6 +42,7 @@ Use this file as a running project notebook. Keep entries short and practical.
 | 2026-09-08 | Keep monitor lifecycle counters in a separate status store and expose them through `/api/v1/live/status` | Market snapshots answer “what was the latest value?” while status metadata answers “is the monitor working?” |
 | 2026-09-08 | Display backend monitor state and counters in the dashboard | A frontend should consume explicit operational status rather than infer every failure from missing market values |
 | 2026-09-08 | Count reconnect attempts through an optional retry callback | Recovery can be healthy overall while still revealing transport instability that operators should observe |
+| 2026-09-08 | Persist one latest live snapshot per provider symbol instead of every raw trade | Restart safety is useful, but high-volume tick history needs a separate retention and storage design |
 
 ## Problems and solutions
 

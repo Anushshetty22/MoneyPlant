@@ -138,7 +138,7 @@ for migration in db/migrations/[0-9]*.sql; do
 done
 ```
 
-The migrations create six tables and insert the initial instrument, provider,
+The migrations create seven tables and insert the initial instrument, provider,
 and macro-dataset definitions. They are not a general-purpose migration
 runner: the project does not yet maintain a schema-version table.
 
@@ -311,6 +311,7 @@ snapshot endpoint.
 | `macro_datasets` | Meaning and provenance of a macro series | Dataset code is unique |
 | `macro_observations` | One dated value for a macro series | Unique by dataset and observation date |
 | `ingestion_runs` | Operational audit record for each load attempt | Status and completion fields must agree |
+| `live_market_snapshots` | Latest restart-safe live value per provider symbol | One row is upserted per provider and symbol; raw ticks are not archived |
 
 The detailed design and reasoning are in
 `docs/MoneyPlant_Phase1_Database_Design.docx` and `docs/database-design.md`.
@@ -366,7 +367,7 @@ The more detailed command-by-command workflow is in
 
 ## 11. Phase 2 status and preparation
 
-Phase 2.11 is in progress. The repository now includes
+Phase 2.12 is in progress. The repository now includes
 `infra/compose.yaml`, which runs PostgreSQL with a named volume, a health
 check, and automatic first-start execution of the ordered migrations. The
 backend and frontend remain local developer processes in this first
@@ -380,6 +381,8 @@ indicator for detecting stale live data. The API also exposes monitor lifecycle
 status and counters for basic operational visibility, which the dashboard now
 displays alongside the latest trade. The counters also include reconnect
 attempts so temporary stream recovery is visible.
+The latest live value is also upserted into PostgreSQL and restored into memory
+when the API starts.
 
 The next planned capabilities are:
 

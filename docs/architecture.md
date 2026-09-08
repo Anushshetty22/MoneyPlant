@@ -4,7 +4,7 @@
 
 ### PostgreSQL
 
-PostgreSQL is the persistent local warehouse. It stores normalized instruments, market candles, macroeconomic observations, and ingestion-run metadata.
+PostgreSQL is the persistent local warehouse. It stores normalized instruments, market candles, macroeconomic observations, ingestion-run metadata, and one latest live snapshot per monitored provider symbol.
 
 ### Go backend
 
