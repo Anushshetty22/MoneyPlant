@@ -32,10 +32,20 @@ type LiveMonitorStatus struct {
 	Received                  int64
 	Accepted                  int64
 	Rejected                  int64
+	Reconnects                int64
 	LastEventObservedAt       *time.Time
 	LastEventSourceReceivedAt *time.Time
 	LastError                 string
 	UpdatedAt                 time.Time
+}
+
+// RecordReconnect counts a failed connection attempt that will be retried.
+// A reconnect is not itself a terminal error because the stream may recover.
+func (s *LiveMonitorStatusStore) RecordReconnect() {
+	s.mu.Lock()
+	s.status.Reconnects++
+	s.status.UpdatedAt = time.Now().UTC()
+	s.mu.Unlock()
 }
 
 // LiveMonitorStatusStore keeps a thread-safe status snapshot for the API.

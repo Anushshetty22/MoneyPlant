@@ -41,6 +41,7 @@ Use this file as a running project notebook. Keep entries short and practical.
 | 2026-09-08 | Mark a live snapshot stale after three dashboard polling intervals without a new backend timestamp | Operational monitoring must distinguish a previously received value from a currently healthy stream |
 | 2026-09-08 | Keep monitor lifecycle counters in a separate status store and expose them through `/api/v1/live/status` | Market snapshots answer “what was the latest value?” while status metadata answers “is the monitor working?” |
 | 2026-09-08 | Display backend monitor state and counters in the dashboard | A frontend should consume explicit operational status rather than infer every failure from missing market values |
+| 2026-09-08 | Count reconnect attempts through an optional retry callback | Recovery can be healthy overall while still revealing transport instability that operators should observe |
 
 ## Problems and solutions
 

@@ -166,3 +166,13 @@ and the last error when one exists.
 The dashboard reads this status endpoint alongside the snapshot endpoint, so
 the browser can show the backend's actual state and counters instead of
 guessing from price freshness alone.
+
+The `reconnects` counter records retry attempts after a stream failure. A
+temporary reconnect does not immediately become a terminal monitor error.
+
+## Phase 2.11 reconnect metrics
+
+The reconnecting stream now accepts an optional retry callback. The API monitor
+uses it to increment `reconnects` whenever a failed connection will be retried.
+This keeps retry policy separate from monitoring while making transient network
+instability visible in the status endpoint and dashboard.

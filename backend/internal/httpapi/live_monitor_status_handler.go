@@ -19,6 +19,7 @@ type liveMonitorStatusResponse struct {
 	Received                  int64   `json:"received"`
 	Accepted                  int64   `json:"accepted"`
 	Rejected                  int64   `json:"rejected"`
+	Reconnects                int64   `json:"reconnects"`
 	LastEventObservedAt       *string `json:"last_event_observed_at"`
 	LastEventSourceReceivedAt *string `json:"last_event_source_received_at"`
 	LastError                 *string `json:"last_error"`
@@ -47,6 +48,7 @@ func liveMonitorStatusHandler(
 		Received:       status.Received,
 		Accepted:       status.Accepted,
 		Rejected:       status.Rejected,
+		Reconnects:     status.Reconnects,
 		UpdatedAt:      status.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}
 	if status.LastEventObservedAt != nil {

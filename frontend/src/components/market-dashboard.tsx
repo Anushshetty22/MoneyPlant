@@ -158,6 +158,7 @@ function LiveSnapshotCard({
           <span>Received: <strong className="font-medium text-slate-800">{status.received}</strong></span>
           <span>Accepted: <strong className="font-medium text-slate-800">{status.accepted}</strong></span>
           <span>Rejected: <strong className="font-medium text-slate-800">{status.rejected}</strong></span>
+          <span>Reconnects: <strong className="font-medium text-slate-800">{status.reconnects}</strong></span>
           <span title={status.updated_at}>Status updated: <strong className="font-medium text-slate-800">{formatLiveTimestamp(status.updated_at)}</strong></span>
         </div>
       )}

@@ -54,6 +54,7 @@ func TestLiveMonitorStatusEndpointReturnsOperationalState(t *testing.T) {
 			ProviderSymbol string  `json:"provider_symbol"`
 			State          string  `json:"state"`
 			Accepted       int64   `json:"accepted"`
+			Reconnects     int64   `json:"reconnects"`
 			LastError      *string `json:"last_error"`
 		} `json:"data"`
 	}
@@ -69,6 +70,9 @@ func TestLiveMonitorStatusEndpointReturnsOperationalState(t *testing.T) {
 	}
 	if envelope.Data.Accepted != 1 {
 		t.Fatalf("accepted = %d, want 1", envelope.Data.Accepted)
+	}
+	if envelope.Data.Reconnects != 0 {
+		t.Fatalf("reconnects = %d, want 0", envelope.Data.Reconnects)
 	}
 	if envelope.Data.LastError != nil {
 		t.Fatalf("last_error = %q, want null", *envelope.Data.LastError)

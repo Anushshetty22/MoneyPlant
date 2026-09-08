@@ -189,6 +189,9 @@ func startOptionalLiveMonitor(
 
 		policy := ingestion.DefaultLiveReconnectPolicy()
 		policy.MaxRetries = cfg.LiveMonitorMaxRetries
+		policy.OnRetry = func(_ error, _ time.Duration) {
+			statusStore.RecordReconnect()
+		}
 		stream, err := ingestion.NewReconnectingLiveMarketStream(
 			provider,
 			ingestion.LiveMarketStreamRequest{ProviderSymbol: cfg.LiveMonitorSymbol},

@@ -51,6 +51,37 @@ func TestReconnectingLiveMarketStreamRetriesAfterDisconnect(t *testing.T) {
 	}
 }
 
+// TestReconnectingLiveMarketStreamReportsRetries verifies that operational
+// callers can count retry attempts without changing stream behavior.
+func TestReconnectingLiveMarketStreamReportsRetries(t *testing.T) {
+	provider := &scriptedLiveProvider{
+		openErrors: []error{errors.New("provider unavailable")},
+		// The provider increments one shared index for errors and streams. The
+		// nil first slot represents the failed initial connection; the second
+		// slot is the stream opened after the retry.
+		streams: []ingestion.LiveMarketStream{
+			nil,
+			&scriptedLiveStream{events: []ingestion.LiveMarketEvent{reconnectEvent(t)}},
+		},
+	}
+	retryCount := 0
+	policy := testReconnectPolicy(func(_ context.Context, _ time.Duration) error { return nil })
+	policy.OnRetry = func(_ error, _ time.Duration) { retryCount++ }
+
+	stream, err := ingestion.NewReconnectingLiveMarketStream(provider, ingestion.LiveMarketStreamRequest{ProviderSymbol: "BTCUSDT"}, policy)
+	if err != nil {
+		t.Fatalf("create reconnecting stream: %v", err)
+	}
+	defer stream.Close()
+
+	if _, err := stream.Receive(context.Background()); err != nil {
+		t.Fatalf("receive after retry: %v", err)
+	}
+	if retryCount != 1 {
+		t.Fatalf("retry count = %d, want 1", retryCount)
+	}
+}
+
 // TestReconnectingLiveMarketStreamStopsAtRetryLimit verifies that an
 // unavailable provider produces a bounded error rather than retrying forever.
 func TestReconnectingLiveMarketStreamStopsAtRetryLimit(t *testing.T) {

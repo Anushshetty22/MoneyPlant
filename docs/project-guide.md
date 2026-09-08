@@ -366,7 +366,7 @@ The more detailed command-by-command workflow is in
 
 ## 11. Phase 2 status and preparation
 
-Phase 2.9 is in progress. The repository now includes
+Phase 2.11 is in progress. The repository now includes
 `infra/compose.yaml`, which runs PostgreSQL with a named volume, a health
 check, and automatic first-start execution of the ordered migrations. The
 backend and frontend remain local developer processes in this first
@@ -378,7 +378,8 @@ runnable monitor command, an optional API endpoint for live snapshots, a
 dashboard card that polls the selected symbol's latest event, and a freshness
 indicator for detecting stale live data. The API also exposes monitor lifecycle
 status and counters for basic operational visibility, which the dashboard now
-displays alongside the latest trade.
+displays alongside the latest trade. The counters also include reconnect
+attempts so temporary stream recovery is visible.
 
 The next planned capabilities are:
 

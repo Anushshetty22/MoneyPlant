@@ -25,6 +25,9 @@ type LiveReconnectPolicy struct {
 	InitialBackoff time.Duration
 	MaxBackoff     time.Duration
 	Sleep          func(context.Context, time.Duration) error
+	// OnRetry is called before each retry backoff. It is optional so existing
+	// callers can use reconnecting streams without collecting metrics.
+	OnRetry func(error, time.Duration)
 }
 
 // DefaultLiveReconnectPolicy provides conservative local defaults. The values
@@ -111,6 +114,9 @@ func (s *ReconnectingLiveMarketStream) Receive(ctx context.Context) (LiveMarketE
 		}
 
 		backoff := reconnectBackoff(s.policy, retry)
+		if s.policy.OnRetry != nil {
+			s.policy.OnRetry(lastErr, backoff)
+		}
 		if err := s.policy.Sleep(ctx, backoff); err != nil {
 			return LiveMarketEvent{}, fmt.Errorf("wait before live stream retry: %w", err)
 		}
