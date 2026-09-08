@@ -41,6 +41,7 @@ func NewServer(
 	macroObservationRepository *database.MacroObservationRepository,
 	ingestionRunRepository *database.IngestionRunRepository,
 	liveSnapshotStore *ingestion.LiveMarketSnapshotStore,
+	liveMonitorStatusStore *ingestion.LiveMonitorStatusStore,
 ) *http.Server {
 	// ServeMux maps an incoming HTTP method and path to a handler function.
 	// The health route is the first endpoint because it gives us a small,
@@ -82,6 +83,13 @@ func NewServer(
 	// has not been enabled through LIVE_MONITOR_SYMBOL.
 	mux.HandleFunc("GET /api/v1/live/snapshots", func(responseWriter http.ResponseWriter, request *http.Request) {
 		listLiveSnapshotsHandler(responseWriter, request, liveSnapshotStore)
+	})
+
+	// Phase 2.9 update: expose lifecycle state and counters separately from the
+	// latest market value so an operator can distinguish stale data from a
+	// stopped or failed monitor.
+	mux.HandleFunc("GET /api/v1/live/status", func(responseWriter http.ResponseWriter, request *http.Request) {
+		liveMonitorStatusHandler(responseWriter, liveMonitorStatusStore)
 	})
 
 	// The middleware surrounds every registered route. This means future routes

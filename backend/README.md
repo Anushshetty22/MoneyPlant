@@ -150,3 +150,15 @@ polling for now; the backend remains responsible for the real-time Binance
 WebSocket connection. The card marks data as stale when the backend receive
 timestamp is more than 15 seconds old, giving the learner a first simple
 operational signal without pretending that the snapshot is durable.
+
+## Phase 2.9 live monitor status
+
+The backend also exposes operational state separately from market values:
+
+```bash
+curl http://localhost:8080/api/v1/live/status
+```
+
+The response reports whether monitoring is `disabled`, `starting`, `running`,
+`stopped`, or in `error`, along with event counters, the last event timestamps,
+and the last error when one exists.

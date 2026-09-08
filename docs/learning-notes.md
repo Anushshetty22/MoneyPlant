@@ -39,6 +39,7 @@ Use this file as a running project notebook. Keep entries short and practical.
 | 2026-09-08 | Expose live snapshots through the existing API only when `LIVE_MONITOR_SYMBOL` is set | The Phase 1 read API remains usable without a WebSocket, while live monitoring becomes observable through a normal HTTP request |
 | 2026-09-08 | Poll the live snapshot endpoint from the dashboard instead of opening a browser WebSocket | The backend owns the Binance connection, while the first frontend integration stays simple and reuses the existing same-origin API proxy |
 | 2026-09-08 | Mark a live snapshot stale after three dashboard polling intervals without a new backend timestamp | Operational monitoring must distinguish a previously received value from a currently healthy stream |
+| 2026-09-08 | Keep monitor lifecycle counters in a separate status store and expose them through `/api/v1/live/status` | Market snapshots answer “what was the latest value?” while status metadata answers “is the monitor working?” |
 
 ## Problems and solutions
 

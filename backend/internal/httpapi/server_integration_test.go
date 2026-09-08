@@ -66,6 +66,7 @@ func TestReadOnlyAPIIntegration(t *testing.T) {
 		database.NewMacroObservationRepository(pool),
 		database.NewIngestionRunRepository(pool),
 		ingestion.NewLiveMarketSnapshotStore(),
+		ingestion.NewLiveMonitorStatusStore(),
 	)
 
 	// httptest.NewServer uses an ephemeral local port and serves the exact Handler

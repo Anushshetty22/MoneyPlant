@@ -38,7 +38,7 @@ func TestLiveSnapshotEndpointReturnsLatestEvents(t *testing.T) {
 		t.Fatalf("store live event: %v", err)
 	}
 
-	server := httpapi.NewServer("127.0.0.1", 0, nil, nil, nil, nil, nil, store)
+	server := httpapi.NewServer("127.0.0.1", 0, nil, nil, nil, nil, nil, store, ingestion.NewLiveMonitorStatusStore())
 	testServer := httptest.NewServer(server.Handler)
 	defer testServer.Close()
 
@@ -89,7 +89,7 @@ func TestLiveSnapshotEndpointReturnsLatestEvents(t *testing.T) {
 // API behavior when LIVE_MONITOR_SYMBOL is empty and no stream has been started.
 func TestLiveSnapshotEndpointReturnsEmptyArrayWhenDisabled(t *testing.T) {
 	store := ingestion.NewLiveMarketSnapshotStore()
-	server := httpapi.NewServer("127.0.0.1", 0, nil, nil, nil, nil, nil, store)
+	server := httpapi.NewServer("127.0.0.1", 0, nil, nil, nil, nil, nil, store, ingestion.NewLiveMonitorStatusStore())
 	testServer := httptest.NewServer(server.Handler)
 	defer testServer.Close()
 

@@ -290,6 +290,17 @@ as JSON strings. Live monitoring is opt-in through `LIVE_MONITOR_SYMBOL`; when
 it is empty, the endpoint remains available and returns an empty `data` array.
 These snapshots are process memory only and are not historical PostgreSQL data.
 
+### Live monitor status
+
+```text
+GET /api/v1/live/status
+```
+
+This endpoint reports the optional monitor lifecycle (`disabled`, `starting`,
+`running`, `stopped`, or `error`), event counters, the most recent event times,
+and the last error. It is operational metadata and does not replace the live
+snapshot endpoint.
+
 ## 8. Database design summary
 
 | Table | Stores | Important rule |
@@ -355,7 +366,7 @@ The more detailed command-by-command workflow is in
 
 ## 11. Phase 2 status and preparation
 
-Phase 2.8 is in progress. The repository now includes
+Phase 2.9 is in progress. The repository now includes
 `infra/compose.yaml`, which runs PostgreSQL with a named volume, a health
 check, and automatic first-start execution of the ordered migrations. The
 backend and frontend remain local developer processes in this first
@@ -365,7 +376,8 @@ The Phase 2 live path now includes a provider-neutral stream contract, a
 Binance trade adapter, bounded reconnects, an in-memory latest-event store, a
 runnable monitor command, an optional API endpoint for live snapshots, a
 dashboard card that polls the selected symbol's latest event, and a freshness
-indicator for detecting stale live data.
+indicator for detecting stale live data. The API also exposes monitor lifecycle
+status and counters for basic operational visibility.
 
 The next planned capabilities are:
 

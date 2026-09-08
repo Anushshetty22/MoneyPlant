@@ -100,9 +100,10 @@ func main() {
 	// optional live monitor and the HTTP API. The store is harmless when live
 	// monitoring is disabled because it simply remains empty.
 	liveSnapshotStore := ingestion.NewLiveMarketSnapshotStore()
+	liveMonitorStatusStore := ingestion.NewLiveMonitorStatusStore()
 	liveMonitorContext, cancelLiveMonitor := context.WithCancel(context.Background())
 	defer cancelLiveMonitor()
-	startOptionalLiveMonitor(liveMonitorContext, cfg, liveSnapshotStore)
+	startOptionalLiveMonitor(liveMonitorContext, cfg, liveSnapshotStore, liveMonitorStatusStore)
 
 	// Phase 6.1 update: construct the HTTP server after configuration and database
 	// startup have succeeded. This ordering prevents the API from accepting
@@ -116,6 +117,7 @@ func main() {
 		macroObservationRepository,
 		ingestionRunRepository,
 		liveSnapshotStore,
+		liveMonitorStatusStore,
 	)
 
 	// Phase 6.1 update: run ListenAndServe in a goroutine so main can wait for
@@ -169,15 +171,18 @@ func startOptionalLiveMonitor(
 	ctx context.Context,
 	cfg config.Config,
 	store *ingestion.LiveMarketSnapshotStore,
+	statusStore *ingestion.LiveMonitorStatusStore,
 ) {
 	if cfg.LiveMonitorSymbol == "" {
 		log.Printf("live monitor disabled; set LIVE_MONITOR_SYMBOL to enable it")
 		return
 	}
+	statusStore.Configure("binance", cfg.LiveMonitorSymbol)
 
 	go func() {
 		provider, err := ingestion.NewBinanceLiveMarketDataProvider(nil, cfg.LiveMonitorWebSocketURL)
 		if err != nil {
+			statusStore.MarkError(err)
 			log.Printf("live monitor configuration error: %v", err)
 			return
 		}
@@ -190,6 +195,7 @@ func startOptionalLiveMonitor(
 			policy,
 		)
 		if err != nil {
+			statusStore.MarkError(err)
 			log.Printf("live monitor setup error: %v", err)
 			return
 		}
@@ -197,11 +203,21 @@ func startOptionalLiveMonitor(
 
 		monitor, err := ingestion.NewLiveMarketMonitor(stream)
 		if err != nil {
+			statusStore.MarkError(err)
 			log.Printf("live monitor creation error: %v", err)
 			return
 		}
 
-		result, err := monitor.Run(ctx, store.Handle)
+		statusStore.MarkRunning()
+		handleEvent := func(eventContext context.Context, event ingestion.LiveMarketEvent) error {
+			if err := store.Handle(eventContext, event); err != nil {
+				return err
+			}
+			statusStore.RecordAccepted(event)
+			return nil
+		}
+		result, err := monitor.Run(ctx, handleEvent)
+		statusStore.RecordResult(result, err)
 		if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
 			log.Printf("live monitor stopped with error: %v", err)
 		}
