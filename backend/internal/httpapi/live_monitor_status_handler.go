@@ -20,9 +20,12 @@ type liveMonitorStatusResponse struct {
 	Accepted                  int64   `json:"accepted"`
 	Rejected                  int64   `json:"rejected"`
 	Reconnects                int64   `json:"reconnects"`
+	Persisted                 int64   `json:"persisted"`
 	LastEventObservedAt       *string `json:"last_event_observed_at"`
 	LastEventSourceReceivedAt *string `json:"last_event_source_received_at"`
+	LastPersistedAt           *string `json:"last_persisted_at"`
 	LastError                 *string `json:"last_error"`
+	LastPersistenceError      *string `json:"last_persistence_error"`
 	UpdatedAt                 string  `json:"updated_at"`
 }
 
@@ -49,6 +52,7 @@ func liveMonitorStatusHandler(
 		Accepted:       status.Accepted,
 		Rejected:       status.Rejected,
 		Reconnects:     status.Reconnects,
+		Persisted:      status.Persisted,
 		UpdatedAt:      status.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}
 	if status.LastEventObservedAt != nil {
@@ -59,9 +63,17 @@ func liveMonitorStatusHandler(
 		formatted := status.LastEventSourceReceivedAt.UTC().Format(time.RFC3339Nano)
 		response.LastEventSourceReceivedAt = &formatted
 	}
+	if status.LastPersistedAt != nil {
+		formatted := status.LastPersistedAt.UTC().Format(time.RFC3339Nano)
+		response.LastPersistedAt = &formatted
+	}
 	if status.LastError != "" {
 		lastError := status.LastError
 		response.LastError = &lastError
+	}
+	if status.LastPersistenceError != "" {
+		lastPersistenceError := status.LastPersistenceError
+		response.LastPersistenceError = &lastPersistenceError
 	}
 
 	writeJSON(responseWriter, http.StatusOK, map[string]any{"data": response})

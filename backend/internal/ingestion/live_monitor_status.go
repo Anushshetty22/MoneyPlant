@@ -33,9 +33,12 @@ type LiveMonitorStatus struct {
 	Accepted                  int64
 	Rejected                  int64
 	Reconnects                int64
+	Persisted                 int64
 	LastEventObservedAt       *time.Time
 	LastEventSourceReceivedAt *time.Time
+	LastPersistedAt           *time.Time
 	LastError                 string
+	LastPersistenceError      string
 	UpdatedAt                 time.Time
 }
 
@@ -44,6 +47,31 @@ type LiveMonitorStatus struct {
 func (s *LiveMonitorStatusStore) RecordReconnect() {
 	s.mu.Lock()
 	s.status.Reconnects++
+	s.status.UpdatedAt = time.Now().UTC()
+	s.mu.Unlock()
+}
+
+// RecordPersistenceSuccess records a successful durable latest-snapshot write.
+func (s *LiveMonitorStatusStore) RecordPersistenceSuccess() {
+	s.mu.Lock()
+	s.status.Persisted++
+	persistedAt := time.Now().UTC()
+	s.status.LastPersistedAt = &persistedAt
+	s.status.LastPersistenceError = ""
+	s.status.UpdatedAt = persistedAt
+	s.mu.Unlock()
+}
+
+// RecordPersistenceError keeps database-write failures visible without marking
+// the live Binance monitor as stopped. The in-memory stream can continue while
+// operators repair PostgreSQL or the migration.
+func (s *LiveMonitorStatusStore) RecordPersistenceError(err error) {
+	s.mu.Lock()
+	if err == nil {
+		s.status.LastPersistenceError = "unknown persistence error"
+	} else {
+		s.status.LastPersistenceError = err.Error()
+	}
 	s.status.UpdatedAt = time.Now().UTC()
 	s.mu.Unlock()
 }
@@ -159,6 +187,10 @@ func (s *LiveMonitorStatusStore) Snapshot() LiveMonitorStatus {
 	if s.status.LastEventSourceReceivedAt != nil {
 		receivedAt := *s.status.LastEventSourceReceivedAt
 		status.LastEventSourceReceivedAt = &receivedAt
+	}
+	if s.status.LastPersistedAt != nil {
+		persistedAt := *s.status.LastPersistedAt
+		status.LastPersistedAt = &persistedAt
 	}
 	s.mu.RUnlock()
 	return status

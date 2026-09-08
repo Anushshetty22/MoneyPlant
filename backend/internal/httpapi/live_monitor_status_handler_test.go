@@ -49,13 +49,16 @@ func TestLiveMonitorStatusEndpointReturnsOperationalState(t *testing.T) {
 
 	var envelope struct {
 		Data struct {
-			Enabled        bool    `json:"enabled"`
-			Provider       string  `json:"provider"`
-			ProviderSymbol string  `json:"provider_symbol"`
-			State          string  `json:"state"`
-			Accepted       int64   `json:"accepted"`
-			Reconnects     int64   `json:"reconnects"`
-			LastError      *string `json:"last_error"`
+			Enabled              bool    `json:"enabled"`
+			Provider             string  `json:"provider"`
+			ProviderSymbol       string  `json:"provider_symbol"`
+			State                string  `json:"state"`
+			Accepted             int64   `json:"accepted"`
+			Reconnects           int64   `json:"reconnects"`
+			Persisted            int64   `json:"persisted"`
+			LastError            *string `json:"last_error"`
+			LastPersistedAt      *string `json:"last_persisted_at"`
+			LastPersistenceError *string `json:"last_persistence_error"`
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(response.Body).Decode(&envelope); err != nil {
@@ -73,6 +76,9 @@ func TestLiveMonitorStatusEndpointReturnsOperationalState(t *testing.T) {
 	}
 	if envelope.Data.Reconnects != 0 {
 		t.Fatalf("reconnects = %d, want 0", envelope.Data.Reconnects)
+	}
+	if envelope.Data.Persisted != 0 || envelope.Data.LastPersistedAt != nil || envelope.Data.LastPersistenceError != nil {
+		t.Fatalf("unexpected persistence status: %#v", envelope.Data)
 	}
 	if envelope.Data.LastError != nil {
 		t.Fatalf("last_error = %q, want null", *envelope.Data.LastError)

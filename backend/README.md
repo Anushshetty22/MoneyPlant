@@ -192,3 +192,7 @@ PGPASSWORD=change-me-locally psql \
   -h localhost -p 5432 -U moneyplant -d moneyplant \
   -f db/migrations/008_create_live_market_snapshots.sql
 ```
+
+The monitor status also reports successful saves, the last save time, and any
+database persistence warning. This distinguishes a healthy Binance connection
+from a healthy connection whose snapshots cannot be stored.

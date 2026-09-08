@@ -159,8 +159,16 @@ function LiveSnapshotCard({
           <span>Accepted: <strong className="font-medium text-slate-800">{status.accepted}</strong></span>
           <span>Rejected: <strong className="font-medium text-slate-800">{status.rejected}</strong></span>
           <span>Reconnects: <strong className="font-medium text-slate-800">{status.reconnects}</strong></span>
+          <span>Saved: <strong className="font-medium text-slate-800">{status.persisted}</strong></span>
+          {status.last_persisted_at && (
+            <span title={status.last_persisted_at}>Last saved: <strong className="font-medium text-slate-800">{formatLiveTimestamp(status.last_persisted_at)}</strong></span>
+          )}
           <span title={status.updated_at}>Status updated: <strong className="font-medium text-slate-800">{formatLiveTimestamp(status.updated_at)}</strong></span>
         </div>
+      )}
+
+      {isSupported && status?.last_persistence_error && (
+        <p className="mt-3 text-xs text-amber-800">Database save warning: {status.last_persistence_error}</p>
       )}
     </div>
   );

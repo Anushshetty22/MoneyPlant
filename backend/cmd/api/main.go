@@ -234,7 +234,10 @@ func startOptionalLiveMonitor(
 			if lastPersistenceAttemptAt.IsZero() || time.Since(lastPersistenceAttemptAt) >= 5*time.Second {
 				lastPersistenceAttemptAt = time.Now()
 				if err := persistLiveSnapshot(eventContext, snapshotRepository, event); err != nil {
+					statusStore.RecordPersistenceError(err)
 					log.Printf("persist live snapshot: %v", err)
+				} else {
+					statusStore.RecordPersistenceSuccess()
 				}
 			}
 			return nil
@@ -243,7 +246,10 @@ func startOptionalLiveMonitor(
 		if result.LastEvent != nil {
 			persistContext, cancelPersist := context.WithTimeout(context.Background(), 2*time.Second)
 			if persistErr := persistLiveSnapshot(persistContext, snapshotRepository, *result.LastEvent); persistErr != nil {
+				statusStore.RecordPersistenceError(persistErr)
 				log.Printf("persist final live snapshot: %v", persistErr)
+			} else {
+				statusStore.RecordPersistenceSuccess()
 			}
 			cancelPersist()
 		}

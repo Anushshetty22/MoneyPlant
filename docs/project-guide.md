@@ -382,7 +382,8 @@ status and counters for basic operational visibility, which the dashboard now
 displays alongside the latest trade. The counters also include reconnect
 attempts so temporary stream recovery is visible.
 The latest live value is also upserted into PostgreSQL and restored into memory
-when the API starts.
+when the API starts. Persistence success counts and database warnings are also
+visible through the monitor status response and dashboard.
 
 The next planned capabilities are:
 
