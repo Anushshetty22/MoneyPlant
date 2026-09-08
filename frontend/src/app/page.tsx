@@ -40,7 +40,7 @@ export default async function Home() {
             </p>
           </div>
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
-            <span className="font-medium text-slate-800">Phase 2.7</span> · Live market data
+            <span className="font-medium text-slate-800">Phase 2.10</span> · Live monitoring
           </div>
         </header>
 

@@ -162,3 +162,7 @@ curl http://localhost:8080/api/v1/live/status
 The response reports whether monitoring is `disabled`, `starting`, `running`,
 `stopped`, or in `error`, along with event counters, the last event timestamps,
 and the last error when one exists.
+
+The dashboard reads this status endpoint alongside the snapshot endpoint, so
+the browser can show the backend's actual state and counters instead of
+guessing from price freshness alone.

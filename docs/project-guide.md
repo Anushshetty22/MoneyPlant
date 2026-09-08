@@ -377,7 +377,8 @@ Binance trade adapter, bounded reconnects, an in-memory latest-event store, a
 runnable monitor command, an optional API endpoint for live snapshots, a
 dashboard card that polls the selected symbol's latest event, and a freshness
 indicator for detecting stale live data. The API also exposes monitor lifecycle
-status and counters for basic operational visibility.
+status and counters for basic operational visibility, which the dashboard now
+displays alongside the latest trade.
 
 The next planned capabilities are:
 

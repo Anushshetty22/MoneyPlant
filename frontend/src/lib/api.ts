@@ -74,6 +74,22 @@ export type LiveSnapshot = {
   source_received_at: string;
 };
 
+// LiveMonitorStatus describes the backend monitor itself rather than a market
+// value. The dashboard uses it to display connection state and event counts.
+export type LiveMonitorStatus = {
+  enabled: boolean;
+  provider: string;
+  provider_symbol: string;
+  state: "disabled" | "starting" | "running" | "stopped" | "error";
+  received: number;
+  accepted: number;
+  rejected: number;
+  last_event_observed_at: string | null;
+  last_event_source_received_at: string | null;
+  last_error: string | null;
+  updated_at: string;
+};
+
 type DataResponse<T> = {
   data: T[];
 };
@@ -209,4 +225,21 @@ export async function listLiveSnapshots(
 
   const payload = (await response.json()) as DataResponse<LiveSnapshot>;
   return payload.data[0] ?? null;
+}
+
+// getLiveMonitorStatus loads operational metadata for the selected backend
+// monitor. It is separate from listLiveSnapshots because a monitor can be
+// running before its first event arrives, or stopped after its last snapshot.
+export async function getLiveMonitorStatus(signal?: AbortSignal): Promise<LiveMonitorStatus> {
+  const response = await fetch(`${browserAPIBaseURL}/api/v1/live/status`, {
+    cache: "no-store",
+    signal
+  });
+
+  if (!response.ok) {
+    throw new Error(`MoneyPlant API returned HTTP ${response.status}`);
+  }
+
+  const payload = (await response.json()) as { data: LiveMonitorStatus };
+  return payload.data;
 }

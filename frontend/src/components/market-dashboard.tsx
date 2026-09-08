@@ -1,7 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { listCandles, listLiveSnapshots, type Candle, type Instrument, type LiveSnapshot } from "@/lib/api";
+import {
+  getLiveMonitorStatus,
+  listCandles,
+  listLiveSnapshots,
+  type Candle,
+  type Instrument,
+  type LiveMonitorStatus,
+  type LiveSnapshot
+} from "@/lib/api";
 
 // The Phase 1 source decision currently maps crypto to Binance and equities to
 // Yahoo Finance. This small resolver keeps that initial rule visible; a future
@@ -57,12 +65,14 @@ function LiveSnapshotCard({
   symbol,
   isSupported,
   snapshot,
+  status,
   isLoading,
   error
 }: {
   symbol: string;
   isSupported: boolean;
   snapshot: LiveSnapshot | null;
+  status: LiveMonitorStatus | null;
   isLoading: boolean;
   error: string | null;
 }) {
@@ -70,6 +80,22 @@ function LiveSnapshotCard({
   const isStale = snapshot
     ? !Number.isFinite(receivedAtMilliseconds) || Date.now() - receivedAtMilliseconds > liveStaleAfterMilliseconds
     : false;
+  const stateLabel = status?.state ?? "unknown";
+  const hasMonitorError = stateLabel === "error";
+  const statusDotClass = hasMonitorError
+    ? "bg-red-500"
+    : isStale
+      ? "bg-amber-500"
+      : stateLabel === "running"
+        ? "bg-emerald-500"
+        : "bg-slate-300";
+  const statusLabel = hasMonitorError
+    ? "Monitor error"
+    : isStale
+      ? "Stale data"
+      : status?.state === "running"
+        ? "Live"
+        : status?.state ?? "Waiting for status";
 
   return (
     <div className="mt-6 rounded-2xl border border-teal-100 bg-teal-50/60 p-6 shadow-sm">
@@ -80,8 +106,8 @@ function LiveSnapshotCard({
           <p className="mt-1 text-sm text-slate-600">Refreshes every five seconds while this instrument is selected.</p>
         </div>
         <span className="inline-flex items-center gap-2 text-xs font-medium text-slate-600">
-          <span className={`h-2.5 w-2.5 rounded-full ${isStale ? "bg-amber-500" : snapshot ? "bg-emerald-500" : "bg-slate-300"}`} />
-          {isStale ? "Stale data" : snapshot ? "Live" : "Waiting for data"}
+          <span className={`h-2.5 w-2.5 rounded-full ${statusDotClass}`} />
+          {statusLabel}
         </span>
       </div>
 
@@ -93,6 +119,8 @@ function LiveSnapshotCard({
         <p className="mt-5 text-sm text-slate-600">Checking the live stream…</p>
       ) : error ? (
         <p className="mt-5 text-sm text-amber-800">Unable to load live data: {error}</p>
+      ) : hasMonitorError && status?.last_error ? (
+        <p className="mt-5 text-sm text-red-800">Monitor error: {status.last_error}</p>
       ) : snapshot ? (
         <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div>
@@ -123,6 +151,15 @@ function LiveSnapshotCard({
         <p className="mt-5 text-sm text-slate-600">
           No live snapshot is available. Start the API with <code className="rounded bg-white px-1 py-0.5">LIVE_MONITOR_SYMBOL={symbol}</code> to enable it.
         </p>
+      )}
+
+      {isSupported && status && (
+        <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 border-t border-teal-100 pt-4 text-xs text-slate-600">
+          <span>Received: <strong className="font-medium text-slate-800">{status.received}</strong></span>
+          <span>Accepted: <strong className="font-medium text-slate-800">{status.accepted}</strong></span>
+          <span>Rejected: <strong className="font-medium text-slate-800">{status.rejected}</strong></span>
+          <span title={status.updated_at}>Status updated: <strong className="font-medium text-slate-800">{formatLiveTimestamp(status.updated_at)}</strong></span>
+        </div>
       )}
     </div>
   );
@@ -234,6 +271,7 @@ export default function MarketDashboard({ instruments }: { instruments: Instrume
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [liveSnapshot, setLiveSnapshot] = useState<LiveSnapshot | null>(null);
+  const [liveStatus, setLiveStatus] = useState<LiveMonitorStatus | null>(null);
   const [isLiveLoading, setIsLiveLoading] = useState(false);
   const [liveError, setLiveError] = useState<string | null>(null);
 
@@ -277,6 +315,7 @@ export default function MarketDashboard({ instruments }: { instruments: Instrume
 
   useEffect(() => {
     setLiveSnapshot(null);
+    setLiveStatus(null);
     setLiveError(null);
 
     if (!selectedSymbol || selectedInstrument?.asset_type !== "crypto") {
@@ -294,10 +333,14 @@ export default function MarketDashboard({ instruments }: { instruments: Instrume
       setIsLiveLoading(true);
       setLiveError(null);
 
-      listLiveSnapshots(selectedSymbol, controller.signal)
-        .then((snapshot) => {
+      Promise.all([
+        listLiveSnapshots(selectedSymbol, controller.signal),
+        getLiveMonitorStatus(controller.signal)
+      ])
+        .then(([snapshot, status]) => {
           if (isCurrentRequest) {
             setLiveSnapshot(snapshot);
+            setLiveStatus(status);
           }
         })
         .catch((requestError: unknown) => {
@@ -377,6 +420,7 @@ export default function MarketDashboard({ instruments }: { instruments: Instrume
         symbol={selectedSymbol}
         isSupported={selectedInstrument?.asset_type === "crypto"}
         snapshot={liveSnapshot}
+        status={liveStatus}
         isLoading={isLiveLoading}
         error={liveError}
       />
