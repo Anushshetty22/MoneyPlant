@@ -196,3 +196,6 @@ PGPASSWORD=change-me-locally psql \
 The monitor status also reports successful saves, the last save time, and any
 database persistence warning. This distinguishes a healthy Binance connection
 from a healthy connection whose snapshots cannot be stored.
+
+It also reports `restored`, the number of durable snapshots loaded when the API
+started. This makes restart recovery visible in the status endpoint.

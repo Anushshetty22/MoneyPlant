@@ -160,6 +160,7 @@ function LiveSnapshotCard({
           <span>Rejected: <strong className="font-medium text-slate-800">{status.rejected}</strong></span>
           <span>Reconnects: <strong className="font-medium text-slate-800">{status.reconnects}</strong></span>
           <span>Saved: <strong className="font-medium text-slate-800">{status.persisted}</strong></span>
+          <span>Restored: <strong className="font-medium text-slate-800">{status.restored}</strong></span>
           {status.last_persisted_at && (
             <span title={status.last_persisted_at}>Last saved: <strong className="font-medium text-slate-800">{formatLiveTimestamp(status.last_persisted_at)}</strong></span>
           )}

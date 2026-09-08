@@ -56,6 +56,7 @@ func TestLiveMonitorStatusEndpointReturnsOperationalState(t *testing.T) {
 			Accepted             int64   `json:"accepted"`
 			Reconnects           int64   `json:"reconnects"`
 			Persisted            int64   `json:"persisted"`
+			Restored             int64   `json:"restored"`
 			LastError            *string `json:"last_error"`
 			LastPersistedAt      *string `json:"last_persisted_at"`
 			LastPersistenceError *string `json:"last_persistence_error"`
@@ -77,7 +78,7 @@ func TestLiveMonitorStatusEndpointReturnsOperationalState(t *testing.T) {
 	if envelope.Data.Reconnects != 0 {
 		t.Fatalf("reconnects = %d, want 0", envelope.Data.Reconnects)
 	}
-	if envelope.Data.Persisted != 0 || envelope.Data.LastPersistedAt != nil || envelope.Data.LastPersistenceError != nil {
+	if envelope.Data.Persisted != 0 || envelope.Data.Restored != 0 || envelope.Data.LastPersistedAt != nil || envelope.Data.LastPersistenceError != nil {
 		t.Fatalf("unexpected persistence status: %#v", envelope.Data)
 	}
 	if envelope.Data.LastError != nil {

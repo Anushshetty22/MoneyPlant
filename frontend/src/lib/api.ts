@@ -86,6 +86,7 @@ export type LiveMonitorStatus = {
   rejected: number;
   reconnects: number;
   persisted: number;
+  restored: number;
   last_event_observed_at: string | null;
   last_event_source_received_at: string | null;
   last_persisted_at: string | null;

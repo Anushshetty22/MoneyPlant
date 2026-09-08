@@ -367,7 +367,7 @@ The more detailed command-by-command workflow is in
 
 ## 11. Phase 2 status and preparation
 
-Phase 2.12 is in progress. The repository now includes
+Phase 2.14 is in progress. The repository now includes
 `infra/compose.yaml`, which runs PostgreSQL with a named volume, a health
 check, and automatic first-start execution of the ordered migrations. The
 backend and frontend remain local developer processes in this first
@@ -384,6 +384,7 @@ attempts so temporary stream recovery is visible.
 The latest live value is also upserted into PostgreSQL and restored into memory
 when the API starts. Persistence success counts and database warnings are also
 visible through the monitor status response and dashboard.
+The status also reports how many snapshots were restored at startup.
 
 The next planned capabilities are:
 

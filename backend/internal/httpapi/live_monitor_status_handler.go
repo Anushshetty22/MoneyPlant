@@ -21,6 +21,7 @@ type liveMonitorStatusResponse struct {
 	Rejected                  int64   `json:"rejected"`
 	Reconnects                int64   `json:"reconnects"`
 	Persisted                 int64   `json:"persisted"`
+	Restored                  int64   `json:"restored"`
 	LastEventObservedAt       *string `json:"last_event_observed_at"`
 	LastEventSourceReceivedAt *string `json:"last_event_source_received_at"`
 	LastPersistedAt           *string `json:"last_persisted_at"`
@@ -53,6 +54,7 @@ func liveMonitorStatusHandler(
 		Rejected:       status.Rejected,
 		Reconnects:     status.Reconnects,
 		Persisted:      status.Persisted,
+		Restored:       status.Restored,
 		UpdatedAt:      status.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}
 	if status.LastEventObservedAt != nil {

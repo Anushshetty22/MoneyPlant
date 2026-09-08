@@ -34,6 +34,7 @@ type LiveMonitorStatus struct {
 	Rejected                  int64
 	Reconnects                int64
 	Persisted                 int64
+	Restored                  int64
 	LastEventObservedAt       *time.Time
 	LastEventSourceReceivedAt *time.Time
 	LastPersistedAt           *time.Time
@@ -72,6 +73,15 @@ func (s *LiveMonitorStatusStore) RecordPersistenceError(err error) {
 	} else {
 		s.status.LastPersistenceError = err.Error()
 	}
+	s.status.UpdatedAt = time.Now().UTC()
+	s.mu.Unlock()
+}
+
+// RecordRestored records how many durable snapshots seeded the in-memory store
+// during API startup. This is startup metadata, not a new live event count.
+func (s *LiveMonitorStatusStore) RecordRestored(count int) {
+	s.mu.Lock()
+	s.status.Restored = int64(count)
 	s.status.UpdatedAt = time.Now().UTC()
 	s.mu.Unlock()
 }

@@ -107,8 +107,9 @@ func main() {
 	liveSnapshotStore := ingestion.NewLiveMarketSnapshotStore()
 	liveMonitorStatusStore := ingestion.NewLiveMonitorStatusStore()
 	restoreContext, cancelRestore := context.WithTimeout(context.Background(), 3*time.Second)
-	restoreDurableLiveSnapshots(restoreContext, liveMarketSnapshotRepository, liveSnapshotStore)
+	restoredSnapshotCount := restoreDurableLiveSnapshots(restoreContext, liveMarketSnapshotRepository, liveSnapshotStore)
 	cancelRestore()
+	liveMonitorStatusStore.RecordRestored(restoredSnapshotCount)
 	liveMonitorContext, cancelLiveMonitor := context.WithCancel(context.Background())
 	defer cancelLiveMonitor()
 	startOptionalLiveMonitor(liveMonitorContext, cfg, liveSnapshotStore, liveMonitorStatusStore, liveMarketSnapshotRepository)
@@ -268,12 +269,13 @@ func restoreDurableLiveSnapshots(
 	ctx context.Context,
 	repository *database.LiveMarketSnapshotRepository,
 	store *ingestion.LiveMarketSnapshotStore,
-) {
+) int {
 	rows, err := repository.List(ctx)
 	if err != nil {
 		log.Printf("restore durable live snapshots: %v", err)
-		return
+		return 0
 	}
+	restoredCount := 0
 	for _, row := range rows {
 		event := ingestion.LiveMarketEvent{
 			ProviderSymbol:   row.ProviderSymbol,
@@ -285,11 +287,14 @@ func restoreDurableLiveSnapshots(
 		}
 		if err := store.Handle(ctx, event); err != nil {
 			log.Printf("restore durable live snapshot for %s: %v", row.ProviderSymbol, err)
+			continue
 		}
+		restoredCount++
 	}
 	if len(rows) > 0 {
-		log.Printf("restored %d durable live snapshot(s)", len(rows))
+		log.Printf("restored %d durable live snapshot(s)", restoredCount)
 	}
+	return restoredCount
 }
 
 func persistLiveSnapshot(
