@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { listCandles, type Candle, type Instrument } from "@/lib/api";
+import { listCandles, listLiveSnapshots, type Candle, type Instrument, type LiveSnapshot } from "@/lib/api";
 
 // The Phase 1 source decision currently maps crypto to Binance and equities to
 // Yahoo Finance. This small resolver keeps that initial rule visible; a future
@@ -18,6 +18,86 @@ function formatRetrievedAt(value: string): string {
     dateStyle: "medium",
     timeStyle: "short"
   }).format(new Date(value));
+}
+
+// formatLiveTimestamp makes the browser's local timezone visible to the user.
+// The exact UTC value remains available through the title attribute, which is
+// useful when comparing the dashboard with provider timestamps and logs.
+function formatLiveTimestamp(value: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "medium"
+  }).format(new Date(value));
+}
+
+// LiveSnapshotCard displays the latest event separately from historical candles
+// because the two values have different meanings: a candle summarizes a time
+// window, while this card shows the most recent individual trade.
+function LiveSnapshotCard({
+  symbol,
+  isSupported,
+  snapshot,
+  isLoading,
+  error
+}: {
+  symbol: string;
+  isSupported: boolean;
+  snapshot: LiveSnapshot | null;
+  isLoading: boolean;
+  error: string | null;
+}) {
+  return (
+    <div className="mt-6 rounded-2xl border border-teal-100 bg-teal-50/60 p-6 shadow-sm">
+      <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-growth">Live monitor</p>
+          <h3 className="mt-2 text-xl font-semibold text-ink">Latest trade</h3>
+          <p className="mt-1 text-sm text-slate-600">Refreshes every five seconds while this instrument is selected.</p>
+        </div>
+        <span className="inline-flex items-center gap-2 text-xs font-medium text-slate-600">
+          <span className={`h-2.5 w-2.5 rounded-full ${snapshot ? "bg-emerald-500" : "bg-slate-300"}`} />
+          {snapshot ? "Receiving data" : "Waiting for data"}
+        </span>
+      </div>
+
+      {!isSupported ? (
+        <p className="mt-5 text-sm text-slate-600">
+          Live Binance monitoring is currently available for crypto instruments only. Historical data remains available below.
+        </p>
+      ) : isLoading && !snapshot ? (
+        <p className="mt-5 text-sm text-slate-600">Checking the live stream…</p>
+      ) : error ? (
+        <p className="mt-5 text-sm text-amber-800">Unable to load live data: {error}</p>
+      ) : snapshot ? (
+        <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-500">Price</p>
+            <p className="mt-1 text-2xl font-semibold text-ink">{snapshot.price}</p>
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-500">Quantity</p>
+            <p className="mt-1 text-lg font-medium text-ink">{snapshot.quantity}</p>
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-500">Trade time</p>
+            <p className="mt-1 text-sm font-medium text-ink" title={snapshot.observed_at}>
+              {formatLiveTimestamp(snapshot.observed_at)}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-500">Received by backend</p>
+            <p className="mt-1 text-sm font-medium text-ink" title={snapshot.source_received_at}>
+              {formatLiveTimestamp(snapshot.source_received_at)}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <p className="mt-5 text-sm text-slate-600">
+          No live snapshot is available. Start the API with <code className="rounded bg-white px-1 py-0.5">LIVE_MONITOR_SYMBOL={symbol}</code> to enable it.
+        </p>
+      )}
+    </div>
+  );
 }
 
 // PriceChart turns close-price strings into SVG coordinates. SVG is used here
@@ -125,6 +205,9 @@ export default function MarketDashboard({ instruments }: { instruments: Instrume
   const [candles, setCandles] = useState<Candle[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [liveSnapshot, setLiveSnapshot] = useState<LiveSnapshot | null>(null);
+  const [isLiveLoading, setIsLiveLoading] = useState(false);
+  const [liveError, setLiveError] = useState<string | null>(null);
 
   const selectedInstrument = useMemo(
     () => instruments.find((instrument) => instrument.canonical_symbol === selectedSymbol),
@@ -163,6 +246,54 @@ export default function MarketDashboard({ instruments }: { instruments: Instrume
 
     return () => controller.abort();
   }, [from, selectedInstrument, to]);
+
+  useEffect(() => {
+    setLiveSnapshot(null);
+    setLiveError(null);
+
+    if (!selectedSymbol || selectedInstrument?.asset_type !== "crypto") {
+      setIsLiveLoading(false);
+      return;
+    }
+
+    let isCurrentRequest = true;
+    const controller = new AbortController();
+
+    // Fetch once immediately and then poll. The API currently exposes a
+    // snapshot endpoint rather than a browser WebSocket, so polling keeps this
+    // first dashboard integration simple while the backend stream stays live.
+    const loadLiveSnapshot = () => {
+      setIsLiveLoading(true);
+      setLiveError(null);
+
+      listLiveSnapshots(selectedSymbol, controller.signal)
+        .then((snapshot) => {
+          if (isCurrentRequest) {
+            setLiveSnapshot(snapshot);
+          }
+        })
+        .catch((requestError: unknown) => {
+          if (!isCurrentRequest || (requestError instanceof DOMException && requestError.name === "AbortError")) {
+            return;
+          }
+          setLiveError(requestError instanceof Error ? requestError.message : "Unable to load live data");
+        })
+        .finally(() => {
+          if (isCurrentRequest) {
+            setIsLiveLoading(false);
+          }
+        });
+    };
+
+    loadLiveSnapshot();
+    const refreshTimer = window.setInterval(loadLiveSnapshot, 5000);
+
+    return () => {
+      isCurrentRequest = false;
+      controller.abort();
+      window.clearInterval(refreshTimer);
+    };
+  }, [selectedInstrument, selectedSymbol]);
 
   return (
     <section id="market-view" className="mt-10 scroll-mt-20">
@@ -213,6 +344,14 @@ export default function MarketDashboard({ instruments }: { instruments: Instrume
           </div>
         )}
       </div>
+
+      <LiveSnapshotCard
+        symbol={selectedSymbol}
+        isSupported={selectedInstrument?.asset_type === "crypto"}
+        snapshot={liveSnapshot}
+        isLoading={isLiveLoading}
+        error={liveError}
+      />
 
       {isLoading ? (
         <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-8 text-slate-600 shadow-sm">Loading candles…</div>

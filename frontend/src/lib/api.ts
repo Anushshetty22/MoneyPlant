@@ -62,6 +62,18 @@ export type MacroObservation = {
   source_row_reference: string | null;
 };
 
+// LiveSnapshot represents the latest in-memory trade returned by the Phase 2
+// live-monitor endpoint. Price and quantity remain strings so the browser does
+// not accidentally round exact decimal values through JavaScript numbers.
+export type LiveSnapshot = {
+  provider_symbol: string;
+  event_type: string;
+  observed_at: string;
+  price: string;
+  quantity: string;
+  source_received_at: string;
+};
+
 type DataResponse<T> = {
   data: T[];
 };
@@ -176,4 +188,25 @@ export async function listMacroObservations(
 
   const payload = (await response.json()) as DataResponse<MacroObservation>;
   return payload.data;
+}
+
+// listLiveSnapshots loads the latest event for one provider symbol. The Go API
+// returns an array because it also supports listing every monitored symbol;
+// this client helper keeps the dashboard focused on the selected instrument.
+export async function listLiveSnapshots(
+  symbol: string,
+  signal?: AbortSignal
+): Promise<LiveSnapshot | null> {
+  const query = new URLSearchParams({ symbol });
+  const response = await fetch(`${browserAPIBaseURL}/api/v1/live/snapshots?${query.toString()}`, {
+    cache: "no-store",
+    signal
+  });
+
+  if (!response.ok) {
+    throw new Error(`MoneyPlant API returned HTTP ${response.status}`);
+  }
+
+  const payload = (await response.json()) as DataResponse<LiveSnapshot>;
+  return payload.data[0] ?? null;
 }

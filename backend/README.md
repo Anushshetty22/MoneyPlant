@@ -143,3 +143,8 @@ the requested symbol has not received an event yet. Prices and quantities stay
 JSON strings so exact decimal precision is preserved. These snapshots are
 memory-only and disappear when the API process stops; historical candles still
 come from PostgreSQL.
+
+The dashboard reads this endpoint through the Next.js backend proxy. Its live
+card refreshes every five seconds for the selected instrument. This is browser
+polling for now; the backend remains responsible for the real-time Binance
+WebSocket connection.
