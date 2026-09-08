@@ -355,7 +355,7 @@ The more detailed command-by-command workflow is in
 
 ## 11. Phase 2 status and preparation
 
-Phase 2.7 is in progress. The repository now includes
+Phase 2.8 is in progress. The repository now includes
 `infra/compose.yaml`, which runs PostgreSQL with a named volume, a health
 check, and automatic first-start execution of the ordered migrations. The
 backend and frontend remain local developer processes in this first
@@ -363,8 +363,9 @@ infrastructure slice.
 
 The Phase 2 live path now includes a provider-neutral stream contract, a
 Binance trade adapter, bounded reconnects, an in-memory latest-event store, a
-runnable monitor command, an optional API endpoint for live snapshots, and a
-dashboard card that polls the selected symbol's latest event.
+runnable monitor command, an optional API endpoint for live snapshots, a
+dashboard card that polls the selected symbol's latest event, and a freshness
+indicator for detecting stale live data.
 
 The next planned capabilities are:
 

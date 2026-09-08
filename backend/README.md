@@ -147,4 +147,6 @@ come from PostgreSQL.
 The dashboard reads this endpoint through the Next.js backend proxy. Its live
 card refreshes every five seconds for the selected instrument. This is browser
 polling for now; the backend remains responsible for the real-time Binance
-WebSocket connection.
+WebSocket connection. The card marks data as stale when the backend receive
+timestamp is more than 15 seconds old, giving the learner a first simple
+operational signal without pretending that the snapshot is durable.

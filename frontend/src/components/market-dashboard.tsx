@@ -30,6 +30,26 @@ function formatLiveTimestamp(value: string): string {
   }).format(new Date(value));
 }
 
+// A snapshot older than three polling intervals is treated as stale. This is
+// not a trading rule; it is a simple operational signal that tells us the
+// backend may no longer be receiving provider events.
+const liveStaleAfterMilliseconds = 15_000;
+
+function formatLiveAge(value: string): string {
+  const ageMilliseconds = Date.now() - new Date(value).getTime();
+  if (!Number.isFinite(ageMilliseconds)) {
+    return "an unknown amount of time";
+  }
+  const ageSeconds = Math.floor(ageMilliseconds / 1000);
+  if (ageSeconds < 1) {
+    return "just now";
+  }
+  if (ageSeconds < 60) {
+    return `${ageSeconds}s ago`;
+  }
+  return `${Math.floor(ageSeconds / 60)}m ago`;
+}
+
 // LiveSnapshotCard displays the latest event separately from historical candles
 // because the two values have different meanings: a candle summarizes a time
 // window, while this card shows the most recent individual trade.
@@ -46,6 +66,11 @@ function LiveSnapshotCard({
   isLoading: boolean;
   error: string | null;
 }) {
+  const receivedAtMilliseconds = snapshot ? new Date(snapshot.source_received_at).getTime() : NaN;
+  const isStale = snapshot
+    ? !Number.isFinite(receivedAtMilliseconds) || Date.now() - receivedAtMilliseconds > liveStaleAfterMilliseconds
+    : false;
+
   return (
     <div className="mt-6 rounded-2xl border border-teal-100 bg-teal-50/60 p-6 shadow-sm">
       <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
@@ -55,8 +80,8 @@ function LiveSnapshotCard({
           <p className="mt-1 text-sm text-slate-600">Refreshes every five seconds while this instrument is selected.</p>
         </div>
         <span className="inline-flex items-center gap-2 text-xs font-medium text-slate-600">
-          <span className={`h-2.5 w-2.5 rounded-full ${snapshot ? "bg-emerald-500" : "bg-slate-300"}`} />
-          {snapshot ? "Receiving data" : "Waiting for data"}
+          <span className={`h-2.5 w-2.5 rounded-full ${isStale ? "bg-amber-500" : snapshot ? "bg-emerald-500" : "bg-slate-300"}`} />
+          {isStale ? "Stale data" : snapshot ? "Live" : "Waiting for data"}
         </span>
       </div>
 
@@ -88,6 +113,9 @@ function LiveSnapshotCard({
             <p className="text-xs uppercase tracking-wide text-slate-500">Received by backend</p>
             <p className="mt-1 text-sm font-medium text-ink" title={snapshot.source_received_at}>
               {formatLiveTimestamp(snapshot.source_received_at)}
+            </p>
+            <p className={`mt-1 text-xs ${isStale ? "text-amber-800" : "text-slate-500"}`}>
+              {isStale ? `No update for ${formatLiveAge(snapshot.source_received_at)}` : formatLiveAge(snapshot.source_received_at)}
             </p>
           </div>
         </div>
