@@ -115,6 +115,59 @@ func TestLoadRejectsInvalidLiveMonitorEndpointAndSymbol(t *testing.T) {
 	}
 }
 
+func TestLoadParsesMultipleLiveMonitorSymbols(t *testing.T) {
+	setRequiredDefaults(t)
+	t.Setenv("LIVE_MONITOR_SYMBOLS", "btcusdt, ETHUSDT")
+	t.Setenv("LIVE_MONITOR_SYMBOL", "SBIN")
+
+	loaded, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if loaded.LiveMonitorSymbol != "BTCUSDT" {
+		t.Fatalf("compatibility symbol = %q, want BTCUSDT", loaded.LiveMonitorSymbol)
+	}
+	want := []string{"BTCUSDT", "ETHUSDT"}
+	if !slicesEqual(loaded.LiveMonitorSymbols, want) {
+		t.Fatalf("symbols = %#v, want %#v", loaded.LiveMonitorSymbols, want)
+	}
+}
+
+func TestLoadUsesSingularLiveMonitorSymbolAsFallback(t *testing.T) {
+	setRequiredDefaults(t)
+	t.Setenv("LIVE_MONITOR_SYMBOL", "btcusdt")
+
+	loaded, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if !slicesEqual(loaded.LiveMonitorSymbols, []string{"BTCUSDT"}) {
+		t.Fatalf("symbols = %#v, want [BTCUSDT]", loaded.LiveMonitorSymbols)
+	}
+}
+
+func TestLoadRejectsDuplicateLiveMonitorSymbols(t *testing.T) {
+	setRequiredDefaults(t)
+	t.Setenv("LIVE_MONITOR_SYMBOLS", "BTCUSDT,btcusdt")
+
+	_, err := Load()
+	if err == nil || !strings.Contains(err.Error(), "LIVE_MONITOR_SYMBOLS") {
+		t.Fatalf("Load() error = %v, want duplicate plural setting error", err)
+	}
+}
+
+func slicesEqual(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
+}
+
 func setRequiredDefaults(t *testing.T) {
 	t.Helper()
 	for _, key := range []string{
@@ -122,6 +175,7 @@ func setRequiredDefaults(t *testing.T) {
 		"POSTGRES_PORT",
 		"LIVE_MONITOR_MAX_RETRIES",
 		"LIVE_MONITOR_SYMBOL",
+		"LIVE_MONITOR_SYMBOLS",
 		"LIVE_MONITOR_WS_URL",
 		"LIVE_MONITOR_PERSIST_INTERVAL",
 		"LIVE_MONITOR_FINAL_PERSIST_TIMEOUT",

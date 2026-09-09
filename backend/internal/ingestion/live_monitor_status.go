@@ -8,6 +8,11 @@ import (
 	"errors"
 	// sync protects status reads from the monitor goroutine and API requests.
 	"sync"
+	// sort makes registry status output deterministic for logs, tests, and the
+	// future multi-status API.
+	"sort"
+	// strings normalizes provider-aware registry keys.
+	"strings"
 	// time records when status changed and when the provider event was observed.
 	"time"
 )
@@ -28,6 +33,7 @@ const (
 type LiveMonitorStatus struct {
 	Enabled                   bool
 	Provider                  string
+	CanonicalSymbol           string
 	ProviderSymbol            string
 	State                     string
 	Received                  int64
@@ -129,6 +135,15 @@ func (s *LiveMonitorStatusStore) Configure(provider, providerSymbol string) {
 	s.mu.Unlock()
 }
 
+// ConfigureInstrument records the full provider-aware identity for a monitor.
+// Configure remains available for the Phase 2 single-symbol callers.
+func (s *LiveMonitorStatusStore) ConfigureInstrument(reference InstrumentReference) {
+	s.Configure(string(reference.Provider), reference.ProviderSymbol)
+	s.mu.Lock()
+	s.status.CanonicalSymbol = reference.CanonicalSymbol
+	s.mu.Unlock()
+}
+
 // MarkRunning records that the monitor has been created and is entering its
 // receive loop. A running monitor may still have zero accepted events.
 func (s *LiveMonitorStatusStore) MarkRunning() {
@@ -219,4 +234,79 @@ func (s *LiveMonitorStatusStore) Snapshot() LiveMonitorStatus {
 	}
 	s.mu.RUnlock()
 	return status
+}
+
+// LiveMonitorStatusRegistry keeps one independent status store per provider
+// and provider symbol. A failing monitor therefore changes only its own
+// counters and state instead of overwriting another instrument's status.
+type LiveMonitorStatusRegistry struct {
+	mu     sync.RWMutex
+	stores map[LiveMonitorStatusKey]*LiveMonitorStatusStore
+}
+
+// LiveMonitorStatusKey is the stable lookup key for one live monitor.
+type LiveMonitorStatusKey struct {
+	Provider       string
+	ProviderSymbol string
+}
+
+// NewLiveMonitorStatusRegistry creates an empty multi-monitor registry.
+func NewLiveMonitorStatusRegistry() *LiveMonitorStatusRegistry {
+	return &LiveMonitorStatusRegistry{
+		stores: make(map[LiveMonitorStatusKey]*LiveMonitorStatusStore),
+	}
+}
+
+// Register returns the existing status store for a key or creates a configured
+// one. Registration is idempotent so startup code can safely prepare a legacy
+// singular view and the multi-symbol monitor loop can use the same registry.
+func (r *LiveMonitorStatusRegistry) Register(reference InstrumentReference) *LiveMonitorStatusStore {
+	key := normalizeLiveMonitorStatusKey(reference.Provider, reference.ProviderSymbol)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if store, exists := r.stores[key]; exists {
+		return store
+	}
+	store := NewLiveMonitorStatusStore()
+	store.ConfigureInstrument(reference)
+	r.stores[key] = store
+	return store
+}
+
+// Get returns one status store by provider and provider symbol.
+func (r *LiveMonitorStatusRegistry) Get(provider, providerSymbol string) (*LiveMonitorStatusStore, bool) {
+	key := normalizeLiveMonitorStatusKey(ProviderID(provider), providerSymbol)
+	r.mu.RLock()
+	store, exists := r.stores[key]
+	r.mu.RUnlock()
+	return store, exists
+}
+
+// List returns independent status snapshots in deterministic provider/symbol
+// order. It is ready for the plural status endpoint planned in Phase 3.8.
+func (r *LiveMonitorStatusRegistry) List() []LiveMonitorStatus {
+	r.mu.RLock()
+	keys := make([]LiveMonitorStatusKey, 0, len(r.stores))
+	for key := range r.stores {
+		keys = append(keys, key)
+	}
+	sort.Slice(keys, func(left, right int) bool {
+		if keys[left].Provider == keys[right].Provider {
+			return keys[left].ProviderSymbol < keys[right].ProviderSymbol
+		}
+		return keys[left].Provider < keys[right].Provider
+	})
+	result := make([]LiveMonitorStatus, 0, len(keys))
+	for _, key := range keys {
+		result = append(result, r.stores[key].Snapshot())
+	}
+	r.mu.RUnlock()
+	return result
+}
+
+func normalizeLiveMonitorStatusKey(provider ProviderID, providerSymbol string) LiveMonitorStatusKey {
+	return LiveMonitorStatusKey{
+		Provider:       strings.ToLower(strings.TrimSpace(string(provider))),
+		ProviderSymbol: strings.ToUpper(strings.TrimSpace(providerSymbol)),
+	}
 }

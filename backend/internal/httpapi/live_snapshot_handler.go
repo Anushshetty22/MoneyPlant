@@ -15,6 +15,8 @@ import (
 // monitoring endpoint. Decimal values remain strings for the same precision
 // rule used by the historical candle API.
 type liveSnapshotResponse struct {
+	CanonicalSymbol  string `json:"canonical_symbol"`
+	Provider         string `json:"provider"`
 	ProviderSymbol   string `json:"provider_symbol"`
 	EventType        string `json:"event_type"`
 	ObservedAt       string `json:"observed_at"`
@@ -38,9 +40,17 @@ func listLiveSnapshotsHandler(
 	}
 
 	symbol := strings.ToUpper(strings.TrimSpace(request.URL.Query().Get("symbol")))
+	provider := strings.ToLower(strings.TrimSpace(request.URL.Query().Get("provider")))
 	var events []ingestion.LiveMarketEvent
 	if symbol == "" {
 		events = store.List()
+	} else if provider != "" {
+		event, exists := store.GetByProvider(provider, symbol)
+		if !exists {
+			events = []ingestion.LiveMarketEvent{}
+		} else {
+			events = []ingestion.LiveMarketEvent{event}
+		}
 	} else {
 		event, exists := store.Get(symbol)
 		if !exists {
@@ -53,6 +63,8 @@ func listLiveSnapshotsHandler(
 	items := make([]liveSnapshotResponse, 0, len(events))
 	for _, event := range events {
 		items = append(items, liveSnapshotResponse{
+			CanonicalSymbol:  event.CanonicalSymbol,
+			Provider:         string(event.Provider),
 			ProviderSymbol:   event.ProviderSymbol,
 			EventType:        event.EventType,
 			ObservedAt:       event.ObservedAt.UTC().Format(time.RFC3339Nano),

@@ -101,17 +101,21 @@ func main() {
 	liveMarketSnapshotRepository := database.NewLiveMarketSnapshotRepository(databasePool)
 
 	// Phase 2.6 update: create one in-memory snapshot store shared by the
-	// optional live monitor and the HTTP API. The store is harmless when live
+	// optional live monitors and the HTTP API. The store is harmless when live
 	// monitoring is disabled because it simply remains empty.
 	liveSnapshotStore := ingestion.NewLiveMarketSnapshotStore()
+	liveMonitorStatusRegistry := ingestion.NewLiveMonitorStatusRegistry()
 	liveMonitorStatusStore := ingestion.NewLiveMonitorStatusStore()
+	if len(cfg.LiveMonitorSymbols) > 0 {
+		liveMonitorStatusStore = liveMonitorStatusRegistry.Register(liveMonitorReference(cfg.LiveMonitorSymbols[0]))
+	}
 	restoreContext, cancelRestore := context.WithTimeout(context.Background(), cfg.LiveMonitorRestoreTimeout)
 	restoredSnapshotCount := restoreDurableLiveSnapshots(restoreContext, liveMarketSnapshotRepository, liveSnapshotStore)
 	cancelRestore()
 	liveMonitorStatusStore.RecordRestored(restoredSnapshotCount)
 	liveMonitorContext, cancelLiveMonitor := context.WithCancel(context.Background())
 	defer cancelLiveMonitor()
-	startOptionalLiveMonitor(liveMonitorContext, cfg, liveSnapshotStore, liveMonitorStatusStore, liveMarketSnapshotRepository)
+	startOptionalLiveMonitors(liveMonitorContext, cfg, liveSnapshotStore, liveMonitorStatusRegistry, liveMarketSnapshotRepository)
 
 	// Phase 6.1 update: construct the HTTP server after configuration and database
 	// startup have succeeded. This ordering prevents the API from accepting
@@ -172,64 +176,80 @@ func main() {
 	}
 }
 
-// startOptionalLiveMonitor starts live monitoring only when the symbol setting
-// is non-empty. Keeping setup in a background goroutine means a temporary
-// Binance outage does not prevent the read-only API from starting.
-func startOptionalLiveMonitor(
+// startOptionalLiveMonitors starts one independent monitor per configured
+// Binance symbol. A setup or stream failure is recorded on that symbol's
+// status store and does not cancel the other monitor goroutines.
+func startOptionalLiveMonitors(
 	ctx context.Context,
 	cfg config.Config,
 	store *ingestion.LiveMarketSnapshotStore,
-	statusStore *ingestion.LiveMonitorStatusStore,
+	statusRegistry *ingestion.LiveMonitorStatusRegistry,
 	snapshotRepository *database.LiveMarketSnapshotRepository,
 ) {
-	if cfg.LiveMonitorSymbol == "" {
+	if len(cfg.LiveMonitorSymbols) == 0 {
 		log.Printf("live monitor disabled; set LIVE_MONITOR_SYMBOL to enable it")
 		return
 	}
-	statusStore.Configure("binance", cfg.LiveMonitorSymbol)
 
-	go func() {
-		provider, err := ingestion.NewBinanceLiveMarketDataProvider(nil, cfg.LiveMonitorWebSocketURL)
-		if err != nil {
-			statusStore.MarkError(err)
-			log.Printf("live monitor configuration error: %v", err)
-			return
-		}
+	for _, symbol := range cfg.LiveMonitorSymbols {
+		symbol := symbol
+		reference := liveMonitorReference(symbol)
+		statusStore := statusRegistry.Register(reference)
 
-		policy := ingestion.DefaultLiveReconnectPolicy()
-		policy.MaxRetries = cfg.LiveMonitorMaxRetries
-		policy.OnRetry = func(reconnectErr error, _ time.Duration) {
-			statusStore.RecordReconnect(reconnectErr)
-		}
-		stream, err := ingestion.NewReconnectingLiveMarketStream(
-			provider,
-			ingestion.LiveMarketStreamRequest{ProviderSymbol: cfg.LiveMonitorSymbol},
-			policy,
-		)
-		if err != nil {
-			statusStore.MarkError(err)
-			log.Printf("live monitor setup error: %v", err)
-			return
-		}
-		monitor, err := ingestion.NewLiveMarketMonitor(stream)
-		if err != nil {
-			statusStore.MarkError(err)
-			log.Printf("live monitor creation error: %v", err)
-			return
-		}
+		go func() {
+			provider, err := ingestion.NewBinanceLiveMarketDataProvider(nil, cfg.LiveMonitorWebSocketURL)
+			if err != nil {
+				statusStore.MarkError(err)
+				log.Printf("live monitor configuration error: %v", err)
+				return
+			}
 
-		persist := liveSnapshotPersistence(func(persistContext context.Context, event ingestion.LiveMarketEvent) error {
-			return persistLiveSnapshot(persistContext, snapshotRepository, event)
-		})
-		result, _ := runLiveMonitor(
-			ctx,
-			monitor,
-			store,
-			statusStore,
-			persist,
-			cfg.LiveMonitorPersistenceInterval,
-			cfg.LiveMonitorFinalPersistenceTimeout,
-		)
-		log.Printf("live monitor summary: received=%d accepted=%d rejected=%d snapshots=%d", result.Received, result.Accepted, result.Rejected, store.Count())
-	}()
+			policy := ingestion.DefaultLiveReconnectPolicy()
+			policy.MaxRetries = cfg.LiveMonitorMaxRetries
+			policy.OnRetry = func(reconnectErr error, _ time.Duration) {
+				statusStore.RecordReconnect(reconnectErr)
+			}
+			stream, err := ingestion.NewReconnectingLiveMarketStream(
+				provider,
+				ingestion.LiveMarketStreamRequest{
+					CanonicalSymbol: reference.CanonicalSymbol,
+					ProviderSymbol:  reference.ProviderSymbol,
+				},
+				policy,
+			)
+			if err != nil {
+				statusStore.MarkError(err)
+				log.Printf("live monitor setup error: %v", err)
+				return
+			}
+			monitor, err := ingestion.NewLiveMarketMonitor(stream)
+			if err != nil {
+				statusStore.MarkError(err)
+				log.Printf("live monitor creation error: %v", err)
+				return
+			}
+
+			persist := liveSnapshotPersistence(func(persistContext context.Context, event ingestion.LiveMarketEvent) error {
+				return persistLiveSnapshot(persistContext, snapshotRepository, event)
+			})
+			result, _ := runLiveMonitor(
+				ctx,
+				monitor,
+				store,
+				statusStore,
+				persist,
+				cfg.LiveMonitorPersistenceInterval,
+				cfg.LiveMonitorFinalPersistenceTimeout,
+			)
+			log.Printf("live monitor summary: provider=%s symbol=%s received=%d accepted=%d rejected=%d snapshots=%d", reference.Provider, reference.ProviderSymbol, result.Received, result.Accepted, result.Rejected, store.Count())
+		}()
+	}
+}
+
+func liveMonitorReference(symbol string) ingestion.InstrumentReference {
+	return ingestion.InstrumentReference{
+		CanonicalSymbol: symbol,
+		Provider:        ingestion.ProviderBinance,
+		ProviderSymbol:  symbol,
+	}
 }

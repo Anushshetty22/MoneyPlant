@@ -229,6 +229,16 @@ From `backend/`, start the API with one Binance symbol enabled:
 LIVE_MONITOR_SYMBOL=BTCUSDT go run ./cmd/api
 ```
 
+To monitor multiple Binance symbols independently, use the plural setting:
+
+```bash
+LIVE_MONITOR_SYMBOLS=BTCUSDT,ETHUSDT go run ./cmd/api
+```
+
+The singular setting remains compatible and is used when the plural setting is
+not present. Each configured symbol has independent reconnect and event
+counters; one failed stream does not stop the others.
+
 The live-monitor timing settings are optional and have safe local defaults:
 
 | Environment variable | Default | Purpose |
@@ -248,6 +258,7 @@ In another terminal, inspect the live status and latest value:
 ```bash
 curl http://localhost:8080/api/v1/live/status
 curl 'http://localhost:8080/api/v1/live/snapshots?symbol=BTCUSDT'
+curl 'http://localhost:8080/api/v1/live/snapshots?provider=binance&symbol=BTCUSDT'
 ```
 
 The status state normally moves from `starting` to `running`. A temporary

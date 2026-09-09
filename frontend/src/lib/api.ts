@@ -66,7 +66,9 @@ export type MacroObservation = {
 // live-monitor endpoint. Price and quantity remain strings so the browser does
 // not accidentally round exact decimal values through JavaScript numbers.
 export type LiveSnapshot = {
-  provider_symbol: string;
+	canonical_symbol: string;
+	provider: string;
+	provider_symbol: string;
   event_type: string;
   observed_at: string;
   price: string;
@@ -79,6 +81,7 @@ export type LiveSnapshot = {
 export type LiveMonitorStatus = {
   enabled: boolean;
   provider: string;
+  canonical_symbol: string;
   provider_symbol: string;
   state: "disabled" | "starting" | "running" | "reconnecting" | "stopped" | "error";
   received: number;

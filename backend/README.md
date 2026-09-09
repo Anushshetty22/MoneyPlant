@@ -200,6 +200,15 @@ from a healthy connection whose snapshots cannot be stored.
 It also reports `restored`, the number of durable snapshots loaded when the API
 started. This makes restart recovery visible in the status endpoint.
 
+## Phase 3.2 multiple live symbols
+
+The API accepts `LIVE_MONITOR_SYMBOLS=BTCUSDT,ETHUSDT` to start one independent
+Binance monitor per symbol. `LIVE_MONITOR_SYMBOL=BTCUSDT` remains supported for
+single-symbol compatibility. Snapshots are keyed by provider and provider
+symbol, and each monitor has separate reconnect, event, and persistence
+counters. The existing singular status endpoint shows the first configured
+monitor until the plural status endpoint is added in Phase 3.8.
+
 The live monitor accepts optional timing settings such as
 `LIVE_MONITOR_PERSIST_INTERVAL=10s`, `LIVE_MONITOR_FINAL_PERSIST_TIMEOUT=3s`,
 and `LIVE_MONITOR_RESTORE_TIMEOUT=5s`. The API validates these values, the

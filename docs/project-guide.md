@@ -398,11 +398,12 @@ status endpoint and dashboard distinguish `disabled`, `starting`, `running`,
 `reconnecting`, `stopped`, and `error` states. Reconnect details and database
 persistence warnings remain separate so one failure does not hide the other.
 
-Phase 3.1 is now freezing the shared market-data model. The canonical/provider
-identity, provider capability, lifecycle status, and common error contracts are
-documented in [`docs/phase-3-data-model.md`](phase-3-data-model.md). The
-current live monitor remains one-symbol and Binance-only until the later Phase
-3 sub-phases generalize it.
+Phase 3.2 is now extending the shared market-data model into multiple live
+monitors. Phase 3.1 froze the canonical/provider identity, provider capability,
+lifecycle status, and common error contracts; these are documented in
+[`docs/phase-3-data-model.md`](phase-3-data-model.md). The
+current live monitor remains Binance-only until the later Phase 3 sub-phases
+add Angel One.
 
 The next planned capabilities are:
 
@@ -424,4 +425,5 @@ idempotency behavior, and testing workflow remain stable.
 - `docs/ingestion-runbook.md` — complete local workflow
 - `docs/learning-notes.md` — concepts, commands, and problems learned
 - `docs/phase-3-data-model.md` — canonical/provider identity and shared Phase 3 contracts
+- `docs/phase-3.2-multi-live-monitor.md` — multiple live-symbol configuration and behavior
 - `docs/document-style-guide.md` — shared document formatting rules

@@ -128,6 +128,7 @@ func restoreDurableLiveSnapshots(
 	restoredCount := 0
 	for _, row := range rows {
 		event := ingestion.LiveMarketEvent{
+			Provider:         ingestion.ProviderID(row.Provider),
 			ProviderSymbol:   row.ProviderSymbol,
 			EventType:        row.EventType,
 			ObservedAt:       row.ObservedAt.Time,
@@ -152,8 +153,14 @@ func persistLiveSnapshot(
 	repository liveSnapshotRepository,
 	event ingestion.LiveMarketEvent,
 ) error {
+	provider := event.Provider
+	if provider == "" {
+		// Phase 2 events predate the provider field and represent the original
+		// Binance monitor. Keep those events persistable during the migration.
+		provider = ingestion.ProviderBinance
+	}
 	_, err := repository.Upsert(ctx, database.LiveMarketSnapshotInput{
-		Provider:         "binance",
+		Provider:         string(provider),
 		ProviderSymbol:   event.ProviderSymbol,
 		EventType:        event.EventType,
 		ObservedAt:       pgtype.Timestamptz{Time: event.ObservedAt, Valid: true},

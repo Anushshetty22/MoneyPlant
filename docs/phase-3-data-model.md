@@ -1,7 +1,8 @@
 # Phase 3.1 Unified Data Model
 
-This document freezes the shared market-data vocabulary before Angel One or
-multi-symbol monitoring is added.
+This document records the shared market-data vocabulary frozen before Angel
+One integration. Phase 3.2 now uses that vocabulary for multi-symbol live
+monitoring.
 
 ## Canonical instruments and provider identities
 
@@ -30,9 +31,8 @@ instrument_sources
 market_candles
 ```
 
-The live contracts carry the same identity fields. Phase 3.1 defines the
-fields, but the monitor still opens one symbol at a time. Multi-symbol
-orchestration is Phase 3.2.
+The live contracts carry the same identity fields. Multi-symbol orchestration
+uses one independent monitor per provider-symbol pair.
 
 ## Provider capabilities
 
@@ -78,8 +78,9 @@ disabled → starting → running
 
 The common model identifies the provider, canonical symbol, provider symbol,
 counters, last error, and update time. The existing `/api/v1/live/status`
-endpoint remains compatible with Phase 2 and is still single-monitor until
-Phase 3.8 generalizes it.
+endpoint remains compatible with Phase 2 and shows the first configured
+monitor. The status registry already stores every provider-symbol status; Phase
+3.8 will expose the plural status endpoint.
 
 ## Common error vocabulary
 
@@ -99,6 +100,6 @@ retry. Reconnect policy remains a separate responsibility.
 
 ## Compatibility boundary
 
-Phase 3.1 does not add Angel One credentials, network calls, token parsing, or
-multi-symbol lifecycle management. Existing Binance and Yahoo adapters keep
-their current behavior, while the new contracts compile and test offline.
+Phase 3.1 did not add Angel One credentials, network calls, or token parsing.
+Phase 3.2 adds multi-symbol lifecycle management without changing the existing
+Binance and Yahoo adapter behavior.

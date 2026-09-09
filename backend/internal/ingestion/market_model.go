@@ -16,6 +16,7 @@ const (
 	ProviderYahoo    ProviderID = "yahoo"
 	ProviderAngelOne ProviderID = "angel_one"
 	ProviderFixture  ProviderID = "fixture"
+	ProviderUnknown  ProviderID = "unknown"
 )
 
 // MarketInterval is the normalized interval vocabulary shared by historical

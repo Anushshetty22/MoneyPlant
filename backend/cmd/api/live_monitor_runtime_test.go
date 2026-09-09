@@ -16,6 +16,8 @@ import (
 	"strings"
 	// testing defines the automated lifecycle scenarios.
 	"testing"
+	// sync waits for independent monitor goroutines to finish in the multi-symbol test.
+	"sync"
 	// time creates deterministic UTC event timestamps and short test deadlines.
 	"time"
 
@@ -170,6 +172,48 @@ func TestRunLiveMonitorSeparatesPersistenceFailureFromStreamFailure(t *testing.T
 			t.Fatalf("persistence error = %q, want empty", status.LastPersistenceError)
 		}
 	})
+}
+
+func TestRunIndependentLiveMonitorsKeepFailureScopedToOneSymbol(t *testing.T) {
+	failingEvent := runtimeTestEvent(t, "100", "1")
+	failingEvent.ProviderSymbol = "BTCUSDT"
+	healthyEvent := runtimeTestEvent(t, "200", "2")
+	healthyEvent.ProviderSymbol = "ETHUSDT"
+
+	failingMonitor := runtimeMonitor(t, &runtimeScriptedStream{
+		streamErr: errors.New("BTCUSDT connection failed"),
+	})
+	healthyMonitor := runtimeMonitor(t, &runtimeScriptedStream{
+		events: []ingestion.LiveMarketEvent{healthyEvent},
+	})
+	failingStatus := ingestion.NewLiveMonitorStatusStore()
+	failingStatus.Configure("binance", "BTCUSDT")
+	healthyStatus := ingestion.NewLiveMonitorStatusStore()
+	healthyStatus.Configure("binance", "ETHUSDT")
+	store := ingestion.NewLiveMarketSnapshotStore()
+
+	var waitGroup sync.WaitGroup
+	waitGroup.Add(2)
+	go func() {
+		defer waitGroup.Done()
+		_, _ = runLiveMonitor(context.Background(), failingMonitor, store, failingStatus, nil, time.Second, time.Second)
+	}()
+	go func() {
+		defer waitGroup.Done()
+		_, _ = runLiveMonitor(context.Background(), healthyMonitor, store, healthyStatus, nil, time.Second, time.Second)
+	}()
+	waitGroup.Wait()
+
+	if failingStatus.Snapshot().State != ingestion.LiveMonitorStateError {
+		t.Fatalf("failing status = %#v, want error", failingStatus.Snapshot())
+	}
+	healthySnapshot := healthyStatus.Snapshot()
+	if healthySnapshot.State != ingestion.LiveMonitorStateStopped || healthySnapshot.Accepted != 1 {
+		t.Fatalf("healthy status = %#v, want stopped with one accepted event", healthySnapshot)
+	}
+	if store.Count() != 1 {
+		t.Fatalf("shared snapshot count = %d, want healthy symbol only", store.Count())
+	}
 }
 
 // TestRunLiveMonitorRecoversThroughReconnectBeforeShutdown verifies that a

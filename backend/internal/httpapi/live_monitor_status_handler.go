@@ -14,6 +14,7 @@ import (
 type liveMonitorStatusResponse struct {
 	Enabled                   bool    `json:"enabled"`
 	Provider                  string  `json:"provider"`
+	CanonicalSymbol           string  `json:"canonical_symbol"`
 	ProviderSymbol            string  `json:"provider_symbol"`
 	State                     string  `json:"state"`
 	Received                  int64   `json:"received"`
@@ -46,17 +47,18 @@ func liveMonitorStatusHandler(
 
 	status := statusStore.Snapshot()
 	response := liveMonitorStatusResponse{
-		Enabled:        status.Enabled,
-		Provider:       status.Provider,
-		ProviderSymbol: status.ProviderSymbol,
-		State:          status.State,
-		Received:       status.Received,
-		Accepted:       status.Accepted,
-		Rejected:       status.Rejected,
-		Reconnects:     status.Reconnects,
-		Persisted:      status.Persisted,
-		Restored:       status.Restored,
-		UpdatedAt:      status.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		Enabled:         status.Enabled,
+		Provider:        status.Provider,
+		CanonicalSymbol: status.CanonicalSymbol,
+		ProviderSymbol:  status.ProviderSymbol,
+		State:           status.State,
+		Received:        status.Received,
+		Accepted:        status.Accepted,
+		Rejected:        status.Rejected,
+		Reconnects:      status.Reconnects,
+		Persisted:       status.Persisted,
+		Restored:        status.Restored,
+		UpdatedAt:       status.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}
 	if status.LastEventObservedAt != nil {
 		formatted := status.LastEventObservedAt.UTC().Format(time.RFC3339Nano)

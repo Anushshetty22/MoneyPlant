@@ -35,8 +35,11 @@ type Config struct {
 	PostgresPassword string
 
 	// Live monitoring is opt-in. An empty symbol keeps the API in its existing
-	// Phase 1 behavior without opening a network stream.
+	// behavior without opening a network stream. LiveMonitorSymbol remains for
+	// backward compatibility; LiveMonitorSymbols is the Phase 3 multi-symbol
+	// representation.
 	LiveMonitorSymbol       string
+	LiveMonitorSymbols      []string
 	LiveMonitorMaxRetries   int
 	LiveMonitorWebSocketURL string
 	// LiveMonitorPersistenceInterval limits how often the open-ended stream
@@ -88,6 +91,15 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 
+	configuredSymbol := getString("LIVE_MONITOR_SYMBOL", "")
+	configuredSymbols, err := parseLiveMonitorSymbols(os.Getenv("LIVE_MONITOR_SYMBOLS"), configuredSymbol)
+	if err != nil {
+		return Config{}, err
+	}
+	if len(configuredSymbols) > 0 {
+		configuredSymbol = configuredSymbols[0]
+	}
+
 	// Assemble all successfully parsed values into one configuration object.
 	// getString checks the environment first and uses the fallback when the
 	// variable is missing or empty, making local development easy while still
@@ -100,7 +112,8 @@ func Load() (Config, error) {
 		PostgresDatabase:                   getString("POSTGRES_DB", "moneyplant"),
 		PostgresUser:                       getString("POSTGRES_USER", "moneyplant"),
 		PostgresPassword:                   getString("POSTGRES_PASSWORD", "change-me-locally"),
-		LiveMonitorSymbol:                  getString("LIVE_MONITOR_SYMBOL", ""),
+		LiveMonitorSymbol:                  configuredSymbol,
+		LiveMonitorSymbols:                 configuredSymbols,
 		LiveMonitorMaxRetries:              liveMonitorMaxRetries,
 		LiveMonitorWebSocketURL:            getString("LIVE_MONITOR_WS_URL", "wss://stream.binance.com:9443"),
 		LiveMonitorPersistenceInterval:     liveMonitorPersistenceInterval,
@@ -129,10 +142,6 @@ func Load() (Config, error) {
 	if err := validateWebSocketURL(config.LiveMonitorWebSocketURL); err != nil {
 		return Config{}, err
 	}
-	if err := validateLiveMonitorSymbol(config.LiveMonitorSymbol); err != nil {
-		return Config{}, err
-	}
-
 	return config, nil
 }
 
@@ -199,6 +208,10 @@ func validateWebSocketURL(value string) error {
 }
 
 func validateLiveMonitorSymbol(value string) error {
+	return validateLiveMonitorSymbolForKey("LIVE_MONITOR_SYMBOL", value)
+}
+
+func validateLiveMonitorSymbolForKey(key, value string) error {
 	symbol := strings.TrimSpace(value)
 	if symbol == "" {
 		return nil
@@ -207,8 +220,43 @@ func validateLiveMonitorSymbol(value string) error {
 		if (character < 'a' || character > 'z') &&
 			(character < 'A' || character > 'Z') &&
 			(character < '0' || character > '9') {
-			return fmt.Errorf("LIVE_MONITOR_SYMBOL %q contains unsupported character %q", value, character)
+			return fmt.Errorf("%s %q contains unsupported character %q", key, value, character)
 		}
 	}
 	return nil
+}
+
+// parseLiveMonitorSymbols gives the plural setting precedence while keeping
+// LIVE_MONITOR_SYMBOL working for existing local commands and documentation.
+// Empty entries are rejected so a typo such as "BTCUSDT,,ETHUSDT" cannot
+// silently create an unnamed monitor.
+func parseLiveMonitorSymbols(pluralValue, singularValue string) ([]string, error) {
+	value := strings.TrimSpace(pluralValue)
+	key := "LIVE_MONITOR_SYMBOLS"
+	if value == "" {
+		value = strings.TrimSpace(singularValue)
+		key = "LIVE_MONITOR_SYMBOL"
+	}
+	if value == "" {
+		return nil, nil
+	}
+
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
+	for _, part := range parts {
+		symbol := strings.ToUpper(strings.TrimSpace(part))
+		if symbol == "" {
+			return nil, fmt.Errorf("%s contains an empty symbol", key)
+		}
+		if err := validateLiveMonitorSymbolForKey(key, symbol); err != nil {
+			return nil, err
+		}
+		if _, exists := seen[symbol]; exists {
+			return nil, fmt.Errorf("%s contains duplicate symbol %q", key, symbol)
+		}
+		seen[symbol] = struct{}{}
+		result = append(result, symbol)
+	}
+	return result, nil
 }

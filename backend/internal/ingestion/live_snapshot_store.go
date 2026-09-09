@@ -1,43 +1,37 @@
 package ingestion
 
 import (
-	// context keeps the store compatible with LiveMarketEventHandler and allows
-	// future persistence work to observe cancellation consistently.
 	"context"
-	// fmt reports invalid snapshot requests with a useful operation name.
 	"fmt"
-	// math/big lets us copy pgtype.Numeric's internal integer safely.
 	"math/big"
-	// sort makes List return deterministic output for APIs, logs, and tests.
 	"sort"
-	// strings normalizes symbol keys consistently on writes and reads.
 	"strings"
-	// sync protects the snapshot map from concurrent stream callbacks and API
-	// readers.
 	"sync"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// LiveMarketSnapshotStore keeps the latest valid event for each provider symbol.
-//
-// This is intentionally an in-memory Phase 2.4 component. It gives the live
-// monitor somewhere useful to write while we learn concurrency and snapshot
-// semantics before designing a durable live-tick table or API contract.
+// LiveMarketSnapshotStore keeps the latest valid event for each provider and
+// provider symbol pair. The provider is part of the key because two providers
+// may use the same symbol for different instruments or markets.
 type LiveMarketSnapshotStore struct {
 	mu        sync.RWMutex
-	snapshots map[string]LiveMarketEvent
+	snapshots map[liveSnapshotKey]LiveMarketEvent
+}
+
+type liveSnapshotKey struct {
+	provider       ProviderID
+	providerSymbol string
 }
 
 // NewLiveMarketSnapshotStore creates an empty snapshot store.
 func NewLiveMarketSnapshotStore() *LiveMarketSnapshotStore {
 	return &LiveMarketSnapshotStore{
-		snapshots: make(map[string]LiveMarketEvent),
+		snapshots: make(map[liveSnapshotKey]LiveMarketEvent),
 	}
 }
 
 // Handle implements LiveMarketEventHandler and stores one valid event.
-//
 // The monitor already validates events, but validating again at this boundary
 // protects the store if another caller uses it directly in the future.
 func (s *LiveMarketSnapshotStore) Handle(_ context.Context, event LiveMarketEvent) error {
@@ -45,19 +39,37 @@ func (s *LiveMarketSnapshotStore) Handle(_ context.Context, event LiveMarketEven
 		return fmt.Errorf("store live market snapshot: %w", err)
 	}
 
-	symbol := normalizeSnapshotSymbol(event.ProviderSymbol)
+	key := newLiveSnapshotKey(event.Provider, event.ProviderSymbol)
+	event.Provider = key.provider
 	s.mu.Lock()
-	s.snapshots[symbol] = cloneLiveMarketEvent(event)
+	s.snapshots[key] = cloneLiveMarketEvent(event)
 	s.mu.Unlock()
 	return nil
 }
 
-// Get returns the latest event for one symbol. The boolean is false when no
-// event has been stored for that symbol yet.
+// Get returns the latest event for one provider symbol. It remains available
+// for the Phase 2 singular endpoint; callers that know the provider should use
+// GetByProvider to avoid ambiguity.
 func (s *LiveMarketSnapshotStore) Get(providerSymbol string) (LiveMarketEvent, bool) {
 	symbol := normalizeSnapshotSymbol(providerSymbol)
 	s.mu.RLock()
-	event, exists := s.snapshots[symbol]
+	keys := make([]liveSnapshotKey, 0, len(s.snapshots))
+	for key := range s.snapshots {
+		if key.providerSymbol == symbol {
+			keys = append(keys, key)
+		}
+	}
+	sort.Slice(keys, func(left, right int) bool {
+		if keys[left].provider == keys[right].provider {
+			return keys[left].providerSymbol < keys[right].providerSymbol
+		}
+		return keys[left].provider < keys[right].provider
+	})
+	var event LiveMarketEvent
+	var exists bool
+	if len(keys) > 0 {
+		event, exists = s.snapshots[keys[0]]
+	}
 	s.mu.RUnlock()
 	if !exists {
 		return LiveMarketEvent{}, false
@@ -65,27 +77,42 @@ func (s *LiveMarketSnapshotStore) Get(providerSymbol string) (LiveMarketEvent, b
 	return cloneLiveMarketEvent(event), true
 }
 
-// List returns one latest event per symbol in sorted symbol order.
-//
-// Returning copies means callers can inspect or serialize the result without
-// holding the store's read lock and without changing the stored values.
+// GetByProvider returns one unambiguous provider/symbol snapshot.
+func (s *LiveMarketSnapshotStore) GetByProvider(provider, providerSymbol string) (LiveMarketEvent, bool) {
+	key := newLiveSnapshotKey(ProviderID(provider), providerSymbol)
+	s.mu.RLock()
+	event, exists := s.snapshots[key]
+	s.mu.RUnlock()
+	if !exists {
+		return LiveMarketEvent{}, false
+	}
+	return cloneLiveMarketEvent(event), true
+}
+
+// List returns one latest event per provider/symbol pair in deterministic
+// provider-then-symbol order.
 func (s *LiveMarketSnapshotStore) List() []LiveMarketEvent {
 	s.mu.RLock()
-	symbols := make([]string, 0, len(s.snapshots))
-	for symbol := range s.snapshots {
-		symbols = append(symbols, symbol)
+	keys := make([]liveSnapshotKey, 0, len(s.snapshots))
+	for key := range s.snapshots {
+		keys = append(keys, key)
 	}
-	sort.Strings(symbols)
+	sort.Slice(keys, func(left, right int) bool {
+		if keys[left].provider == keys[right].provider {
+			return keys[left].providerSymbol < keys[right].providerSymbol
+		}
+		return keys[left].provider < keys[right].provider
+	})
 
-	result := make([]LiveMarketEvent, 0, len(symbols))
-	for _, symbol := range symbols {
-		result = append(result, cloneLiveMarketEvent(s.snapshots[symbol]))
+	result := make([]LiveMarketEvent, 0, len(s.snapshots))
+	for _, key := range keys {
+		result = append(result, cloneLiveMarketEvent(s.snapshots[key]))
 	}
 	s.mu.RUnlock()
 	return result
 }
 
-// Count returns the number of symbols currently represented in the store.
+// Count returns the number of provider/symbol pairs currently represented.
 func (s *LiveMarketSnapshotStore) Count() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -94,6 +121,17 @@ func (s *LiveMarketSnapshotStore) Count() int {
 
 func normalizeSnapshotSymbol(providerSymbol string) string {
 	return strings.ToUpper(strings.TrimSpace(providerSymbol))
+}
+
+func newLiveSnapshotKey(provider ProviderID, providerSymbol string) liveSnapshotKey {
+	provider = ProviderID(strings.ToLower(strings.TrimSpace(string(provider))))
+	if provider == "" {
+		provider = ProviderUnknown
+	}
+	return liveSnapshotKey{
+		provider:       provider,
+		providerSymbol: normalizeSnapshotSymbol(providerSymbol),
+	}
 }
 
 // cloneLiveMarketEvent prevents the pgtype.Numeric.Int pointer from being

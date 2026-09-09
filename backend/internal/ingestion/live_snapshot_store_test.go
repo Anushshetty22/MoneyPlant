@@ -45,6 +45,33 @@ func TestLiveMarketSnapshotStoreKeepsLatestEvent(t *testing.T) {
 	}
 }
 
+func TestLiveMarketSnapshotStoreSeparatesProvidersWithSameSymbol(t *testing.T) {
+	store := ingestion.NewLiveMarketSnapshotStore()
+	binance := reconnectEvent(t)
+	binance.Provider = ingestion.ProviderBinance
+	yahoo := binance
+	yahoo.Provider = ingestion.ProviderYahoo
+	yahoo.Price = liveNumeric(t, "202.00")
+
+	for _, event := range []ingestion.LiveMarketEvent{binance, yahoo} {
+		if err := store.Handle(context.Background(), event); err != nil {
+			t.Fatalf("store event: %v", err)
+		}
+	}
+
+	if store.Count() != 2 {
+		t.Fatalf("store count = %d, want two provider/symbol snapshots", store.Count())
+	}
+	gotBinance, ok := store.GetByProvider("binance", binance.ProviderSymbol)
+	if !ok || gotBinance.Provider != ingestion.ProviderBinance {
+		t.Fatalf("Binance snapshot = %#v, exists = %v", gotBinance, ok)
+	}
+	gotYahoo, ok := store.GetByProvider("yahoo", yahoo.ProviderSymbol)
+	if !ok || gotYahoo.Provider != ingestion.ProviderYahoo {
+		t.Fatalf("Yahoo snapshot = %#v, exists = %v", gotYahoo, ok)
+	}
+}
+
 // TestLiveMarketSnapshotStoreRejectsInvalidEvents verifies that direct callers
 // cannot bypass the common event validation contract.
 func TestLiveMarketSnapshotStoreRejectsInvalidEvents(t *testing.T) {
