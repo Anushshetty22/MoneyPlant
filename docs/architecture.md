@@ -11,7 +11,8 @@ PostgreSQL is the persistent local warehouse. It stores normalized instruments, 
 The Go application has two responsibilities:
 
 1. Batch ingestion from external APIs and local CSV files.
-2. Read-only REST endpoints for the dashboard.
+2. Read-only REST endpoints for the dashboard, including optional live
+   monitoring status and latest snapshots.
 
 Provider adapters should convert source-specific responses into common domain records before persistence.
 
@@ -49,7 +50,11 @@ must use a named volume so container restarts do not remove data.
 ## Planned component boundaries
 
 ```text
-Provider adapters -> Normalization/validation -> Repository -> PostgreSQL
+Historical providers/CSV -> Normalization/validation -> Repository -> PostgreSQL
+
+Binance WebSocket -> Normalized live event -> In-memory latest snapshot
+                                      |                  |
+                                      +-> status API     +-> PostgreSQL latest snapshot
 
 PostgreSQL -> Go query handlers -> JSON REST API -> Next.js charts
 ```

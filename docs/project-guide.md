@@ -284,11 +284,13 @@ errors, and scope details.
 GET /api/v1/live/snapshots?symbol=BTCUSDT
 ```
 
-The `symbol` filter is optional. The endpoint returns the latest in-memory live
-event for each monitored symbol, with exact price and quantity values encoded
-as JSON strings. Live monitoring is opt-in through `LIVE_MONITOR_SYMBOL`; when
-it is empty, the endpoint remains available and returns an empty `data` array.
-These snapshots are process memory only and are not historical PostgreSQL data.
+The `symbol` filter is optional. The endpoint returns the latest live event for
+each monitored symbol, with exact price and quantity values encoded as JSON
+strings. Live monitoring is opt-in through `LIVE_MONITOR_SYMBOL`; when it is
+empty, the endpoint remains available and returns an empty `data` array. The
+API keeps the current value in memory for fast reads and upserts one latest
+restart-safe row per provider symbol in PostgreSQL. It does not archive every
+raw trade as historical data.
 
 ### Live monitor status
 
@@ -297,9 +299,10 @@ GET /api/v1/live/status
 ```
 
 This endpoint reports the optional monitor lifecycle (`disabled`, `starting`,
-`running`, `stopped`, or `error`), event counters, the most recent event times,
-and the last error. It is operational metadata and does not replace the live
-snapshot endpoint.
+`running`, `reconnecting`, `stopped`, or `error`), event counters, the most
+recent event times, reconnect details, persistence warnings, and the last
+error. It is operational metadata and does not replace the live snapshot
+endpoint.
 
 ## 8. Database design summary
 
@@ -359,15 +362,19 @@ The more detailed command-by-command workflow is in
 - RBI data currently uses reviewed learning CSV fixtures; an automated official
   RBI export is not yet implemented.
 - Angel One ingestion is deferred until API application setup is available.
-- Phase 1 supports batch ingestion, not WebSocket streaming.
+- Phase 1 historical ingestion is batch-oriented. Phase 2 adds optional
+  Binance WebSocket monitoring for one configured symbol.
 - The dashboard is read-only and has no authentication.
 - There is no production deployment, scheduler, alerting, or schema-version
   tracking table yet.
+- Live monitoring currently keeps one latest snapshot per provider symbol; it
+  does not archive every raw trade or monitor multiple symbols at once.
 - The project does not provide investment advice or automated trading.
 
 ## 11. Phase 2 status and preparation
 
-Phase 2.14 is in progress. The repository now includes
+Phase 2.17 documentation and final verification are in progress. Phase 2 now
+includes
 `infra/compose.yaml`, which runs PostgreSQL with a named volume, a health
 check, and automatic first-start execution of the ordered migrations. The
 backend and frontend remain local developer processes in this first
@@ -386,9 +393,16 @@ when the API starts. Persistence success counts and database warnings are also
 visible through the monitor status response and dashboard.
 The status also reports how many snapshots were restored at startup.
 
+Live-monitor timing is configurable through `LIVE_MONITOR_PERSIST_INTERVAL`,
+`LIVE_MONITOR_FINAL_PERSIST_TIMEOUT`, and `LIVE_MONITOR_RESTORE_TIMEOUT`. The
+status endpoint and dashboard distinguish `disabled`, `starting`, `running`,
+`reconnecting`, `stopped`, and `error` states. Reconnect details and database
+persistence warnings remain separate so one failure does not hide the other.
+
 The next planned capabilities are:
 
-- More robust scheduling and operational monitoring.
+- More robust scheduling and operational monitoring beyond the current local
+  live-monitor process.
 - Local LLM and Text-to-SQL exploration.
 - Personal-finance CSV ingestion and categorization.
 - Advanced analytics and machine-learning features.

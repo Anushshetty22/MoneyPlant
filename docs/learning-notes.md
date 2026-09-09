@@ -45,6 +45,9 @@ Use this file as a running project notebook. Keep entries short and practical.
 | 2026-09-08 | Persist one latest live snapshot per provider symbol instead of every raw trade | Restart safety is useful, but high-volume tick history needs a separate retention and storage design |
 | 2026-09-09 | Track persistence successes and errors separately from live-stream health | A connected provider does not guarantee that the latest value was saved successfully |
 | 2026-09-09 | Report how many durable snapshots were restored at startup | Recovery behavior should be visible instead of inferred from a value that happens to appear after restart |
+| 2026-09-09 | Make live-monitor timing configurable and validate it before startup | Operational behavior should be adjustable without code edits, while invalid durations and endpoints should fail clearly |
+| 2026-09-09 | Add an explicit reconnecting status with the last retry error | A temporary provider failure is different from a stopped monitor or a stale market value |
+| 2026-09-09 | Finish Phase 2 with a documented restart-recovery workflow | A live feature is only complete when its startup, shutdown, failure, and recovery behavior can be repeated by the learner |
 
 ## Problems and solutions
 

@@ -220,3 +220,52 @@ file cannot contain the same date twice.
 Inspect `rows_inserted`, `rows_updated`, `rows_rejected`, and `error_message`.
 The run is deliberately retained so the failure is visible instead of being
 hidden by a command retry.
+
+## 11. Run the live monitor with the API
+
+From `backend/`, start the API with one Binance symbol enabled:
+
+```bash
+LIVE_MONITOR_SYMBOL=BTCUSDT go run ./cmd/api
+```
+
+The live-monitor timing settings are optional and have safe local defaults:
+
+| Environment variable | Default | Purpose |
+|---|---:|---|
+| `LIVE_MONITOR_PERSIST_INTERVAL` | `5s` | Minimum time between normal PostgreSQL saves |
+| `LIVE_MONITOR_FINAL_PERSIST_TIMEOUT` | `2s` | Maximum time allowed for the shutdown save |
+| `LIVE_MONITOR_RESTORE_TIMEOUT` | `3s` | Maximum time allowed for startup restoration |
+| `LIVE_MONITOR_MAX_RETRIES` | `3` | Reconnect attempts after a stream failure |
+
+The API validates these settings before opening the database or HTTP server.
+Durations must include units such as `500ms` or `5s`. The WebSocket URL must
+use `ws://` or `wss://`, and the monitored symbol may contain letters and
+numbers only.
+
+In another terminal, inspect the live status and latest value:
+
+```bash
+curl http://localhost:8080/api/v1/live/status
+curl 'http://localhost:8080/api/v1/live/snapshots?symbol=BTCUSDT'
+```
+
+The status state normally moves from `starting` to `running`. A temporary
+provider failure changes it to `reconnecting`; a successful replacement event
+returns it to `running`. A permanent stream failure becomes `error`. Database
+save problems appear in `last_persistence_error` without falsely marking a
+healthy stream as failed.
+
+## 12. Verify restart recovery
+
+1. Start PostgreSQL and the API with `LIVE_MONITOR_SYMBOL=BTCUSDT`.
+2. Wait until `accepted` and `persisted` are greater than zero.
+3. Stop the API with Ctrl+C. The final live event is saved with a short
+   shutdown deadline.
+4. Start the same API command again.
+5. Query `/api/v1/live/status` and confirm `restored` is greater than zero.
+6. Confirm the dashboard first shows the restored latest value and then updates
+   as new Binance trades arrive.
+
+The restored row is a latest snapshot, not a historical tick archive. The
+database keeps exact decimal price and quantity values and UTC timestamps.

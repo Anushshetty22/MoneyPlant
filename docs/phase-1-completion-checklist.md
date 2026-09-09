@@ -76,7 +76,8 @@ mistaken for unfinished or forgotten work.
   credentials, and required configuration are available.
 - [ ] Automated official RBI DBIE export — current files are reviewed learning
   fixtures.
-- [ ] WebSocket ingestion and live monitoring.
+- [x] Optional Binance WebSocket ingestion and live monitoring were added in
+  Phase 2; Phase 1 itself remains batch-oriented.
 - [ ] Scheduler, production deployment, authentication, and alerting.
 - [ ] Local LLM, Text-to-SQL, personal-finance, and ML features.
 
@@ -88,6 +89,7 @@ repository state complete:
 ```bash
 # From backend/
 go test ./...
+go test -race ./cmd/api ./internal/config ./internal/ingestion ./internal/httpapi
 MONEYPLANT_RUN_INTEGRATION=1 go test ./internal/database -v
 MONEYPLANT_RUN_INTEGRATION=1 go test ./internal/httpapi -v
 ```
@@ -102,7 +104,8 @@ The clean-database verification from Phase 8.2 should also remain successful.
 
 ## Completion statement
 
-MoneyPlant Phase 1 is complete as a local-first learning MVP. The system can
-load, validate, store, expose, and visualize market and macroeconomic data.
-Angel One and the advanced analytics/AI capabilities are planned for later
-phases rather than being required for the current working product.
+MoneyPlant Phase 1 is complete as a local-first learning MVP. Phase 2 extends
+that foundation with optional Binance live monitoring, bounded reconnects,
+operational status, and restart-safe latest snapshots. Angel One and the
+advanced analytics/AI capabilities are planned for later phases rather than
+being required for the current working product.

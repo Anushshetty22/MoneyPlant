@@ -39,9 +39,10 @@ The exact symbols, intervals, history ranges, and authoritative provider for eac
 
 The initial macro files will include provenance metadata and their units.
 
-## Explicitly deferred
+## Phase 1 deferred and later-phase boundaries
 
-- WebSocket streaming and live monitoring
+- WebSocket streaming and live monitoring were deferred from Phase 1 and are
+  implemented in Phase 2 for one optional Binance symbol.
 - Text-to-SQL and local LLM agents
 - Personal bank-statement ingestion
 - Spending categorization
@@ -66,4 +67,3 @@ Go read-only REST API
         v
 Next.js dashboard
 ```
-

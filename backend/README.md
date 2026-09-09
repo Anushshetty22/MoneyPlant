@@ -160,8 +160,8 @@ curl http://localhost:8080/api/v1/live/status
 ```
 
 The response reports whether monitoring is `disabled`, `starting`, `running`,
-`stopped`, or in `error`, along with event counters, the last event timestamps,
-and the last error when one exists.
+`reconnecting`, `stopped`, or in `error`, along with event counters, the last
+event timestamps, and the last error when one exists.
 
 The dashboard reads this status endpoint alongside the snapshot endpoint, so
 the browser can show the backend's actual state and counters instead of
@@ -199,3 +199,8 @@ from a healthy connection whose snapshots cannot be stored.
 
 It also reports `restored`, the number of durable snapshots loaded when the API
 started. This makes restart recovery visible in the status endpoint.
+
+The live monitor accepts optional timing settings such as
+`LIVE_MONITOR_PERSIST_INTERVAL=10s`, `LIVE_MONITOR_FINAL_PERSIST_TIMEOUT=3s`,
+and `LIVE_MONITOR_RESTORE_TIMEOUT=5s`. The API validates these values, the
+WebSocket URL, and the monitored symbol before startup.
