@@ -23,14 +23,13 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// LiveMarketStreamRequest describes one live subscription.
-//
-// Phase 2.1 intentionally supports one provider symbol at a time. Keeping the
-// request small makes the first stream boundary easy to understand; reconnect,
-// multiple symbols, and provider-specific subscription options can be added
-// later without changing the normalized event model.
+// LiveMarketStreamRequest describes one live subscription. Phase 3.1 adds the
+// canonical identity and optional provider token without changing the existing
+// one-symbol execution boundary; multi-symbol orchestration is Phase 3.2.
 type LiveMarketStreamRequest struct {
-	ProviderSymbol string
+	CanonicalSymbol      string
+	ProviderSymbol       string
+	ProviderInstrumentID string
 }
 
 // LiveMarketEvent is the provider-neutral representation of one live trade.
@@ -40,6 +39,8 @@ type LiveMarketStreamRequest struct {
 // price and quantity remain pgtype.Numeric values so a decimal such as
 // "64323.61000000" is never rounded through float64.
 type LiveMarketEvent struct {
+	CanonicalSymbol  string
+	Provider         ProviderID
 	ProviderSymbol   string
 	EventType        string
 	ObservedAt       time.Time
@@ -54,7 +55,7 @@ type LiveMarketEvent struct {
 // provider JSON decoding, reconnect policy, and provider error messages. The
 // rest of the application only sees this small provider-independent interface.
 type LiveMarketDataProvider interface {
-	ProviderName() string
+	MarketDataProvider
 	OpenTradeStream(context.Context, LiveMarketStreamRequest) (LiveMarketStream, error)
 }
 

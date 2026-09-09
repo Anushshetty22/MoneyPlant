@@ -32,7 +32,13 @@ func NewFixtureLiveMarketDataProvider(events []LiveMarketEvent) *FixtureLiveMark
 
 // ProviderName identifies the offline source in logs and future run metadata.
 func (p *FixtureLiveMarketDataProvider) ProviderName() string {
-	return "fixture"
+	return string(ProviderFixture)
+}
+
+// Capabilities makes the deterministic stream advertise the same live
+// contract as a network-backed provider.
+func (p *FixtureLiveMarketDataProvider) Capabilities() ProviderCapabilities {
+	return ProviderCapabilities{Live: true}
 }
 
 // OpenTradeStream selects fixture events for the requested provider symbol.
@@ -45,6 +51,12 @@ func (p *FixtureLiveMarketDataProvider) OpenTradeStream(_ context.Context, reque
 	selectedEvents := make([]LiveMarketEvent, 0, len(p.events))
 	for _, event := range p.events {
 		if event.ProviderSymbol == symbol {
+			if event.CanonicalSymbol == "" {
+				event.CanonicalSymbol = request.CanonicalSymbol
+			}
+			if event.Provider == "" {
+				event.Provider = ProviderFixture
+			}
 			selectedEvents = append(selectedEvents, event)
 		}
 	}

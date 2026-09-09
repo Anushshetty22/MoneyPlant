@@ -16,6 +16,13 @@ The Go application has two responsibilities:
 
 Provider adapters should convert source-specific responses into common domain records before persistence.
 
+Phase 3.1 freezes the shared market vocabulary in
+[`docs/phase-3-data-model.md`](phase-3-data-model.md). A canonical instrument
+such as `SBIN` is resolved through `instrument_sources` to provider-specific
+identities such as `SBIN.NS` or a future Angel One symbol/token. Provider
+capabilities, live lifecycle states, and market errors are represented by
+provider-neutral Go contracts before any provider-specific adapter is added.
+
 ### Next.js frontend
 
 The Next.js application is a read-only presentation layer. It calls the Go API and renders charts, filters, loading states, empty states, and errors.
@@ -50,7 +57,8 @@ must use a named volume so container restarts do not remove data.
 ## Planned component boundaries
 
 ```text
-Historical providers/CSV -> Normalization/validation -> Repository -> PostgreSQL
+Canonical instrument -> provider mapping -> provider adapter
+        -> normalization/validation -> Repository -> PostgreSQL
 
 Binance WebSocket -> Normalized live event -> In-memory latest snapshot
                                       |                  |

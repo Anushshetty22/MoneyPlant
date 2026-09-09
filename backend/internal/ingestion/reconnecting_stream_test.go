@@ -153,6 +153,10 @@ type scriptedLiveProvider struct {
 
 func (p *scriptedLiveProvider) ProviderName() string { return "scripted" }
 
+func (p *scriptedLiveProvider) Capabilities() ingestion.ProviderCapabilities {
+	return ingestion.ProviderCapabilities{Live: true}
+}
+
 func (p *scriptedLiveProvider) OpenTradeStream(_ context.Context, _ ingestion.LiveMarketStreamRequest) (ingestion.LiveMarketStream, error) {
 	index := p.openCount
 	p.openCount++

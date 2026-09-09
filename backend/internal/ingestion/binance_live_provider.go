@@ -62,7 +62,13 @@ func NewBinanceLiveMarketDataProvider(dialer *websocket.Dialer, baseURL string) 
 
 // ProviderName identifies Binance in logs and future live-ingestion metadata.
 func (p *BinanceLiveMarketDataProvider) ProviderName() string {
-	return "binance"
+	return string(ProviderBinance)
+}
+
+// Capabilities describes this adapter's live trade-stream boundary. Live
+// trade events are not requested at a candle interval.
+func (p *BinanceLiveMarketDataProvider) Capabilities() ProviderCapabilities {
+	return ProviderCapabilities{Live: true}
 }
 
 // OpenTradeStream connects to Binance's raw <symbol>@trade stream.
@@ -89,14 +95,18 @@ func (p *BinanceLiveMarketDataProvider) OpenTradeStream(ctx context.Context, req
 		return nil, fmt.Errorf("connect Binance trade stream for %s: %w", symbol, err)
 	}
 
-	return &binanceLiveMarketStream{connection: connection}, nil
+	return &binanceLiveMarketStream{
+		connection:      connection,
+		canonicalSymbol: request.CanonicalSymbol,
+	}, nil
 }
 
 // binanceLiveMarketStream adapts one Gorilla WebSocket connection to the
 // provider-independent LiveMarketStream interface.
 type binanceLiveMarketStream struct {
-	connection *websocket.Conn
-	closeOnce  sync.Once
+	connection      *websocket.Conn
+	canonicalSymbol string
+	closeOnce       sync.Once
 }
 
 // Receive waits for one Binance message and converts it to a normalized event.
@@ -130,7 +140,12 @@ func (s *binanceLiveMarketStream) Receive(ctx context.Context) (LiveMarketEvent,
 		if result.err != nil {
 			return LiveMarketEvent{}, fmt.Errorf("read Binance trade message: %w", result.err)
 		}
-		return normalizeBinanceTradeMessage(result.payload)
+		event, err := normalizeBinanceTradeMessage(result.payload)
+		if err != nil {
+			return LiveMarketEvent{}, err
+		}
+		event.CanonicalSymbol = s.canonicalSymbol
+		return event, nil
 	}
 }
 
@@ -183,6 +198,7 @@ func normalizeBinanceTradeMessage(payload []byte) (LiveMarketEvent, error) {
 	}
 
 	return LiveMarketEvent{
+		Provider:         ProviderBinance,
 		ProviderSymbol:   strings.ToUpper(message.Symbol),
 		EventType:        "trade",
 		ObservedAt:       time.UnixMilli(message.TradeTime).UTC(),

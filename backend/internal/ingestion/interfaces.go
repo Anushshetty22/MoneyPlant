@@ -19,10 +19,17 @@ import (
 // HistoricalCandleRequest describes the time window and interval requested from a market provider.
 // Providers translate this provider-independent request into their own API format.
 type HistoricalCandleRequest struct {
-	ProviderSymbol string
-	Interval       string
-	From           pgtype.Timestamptz
-	To             pgtype.Timestamptz
+	// CanonicalSymbol is MoneyPlant's stable instrument identity. It is kept
+	// alongside ProviderSymbol because providers must never receive the
+	// canonical value by assumption.
+	CanonicalSymbol string
+	ProviderSymbol  string
+	// ProviderInstrumentID is optional for providers such as Binance and Yahoo;
+	// Angel One will use it for token-based requests in a later sub-phase.
+	ProviderInstrumentID string
+	Interval             string
+	From                 pgtype.Timestamptz
+	To                   pgtype.Timestamptz
 }
 
 // HistoricalMarketDataProvider is implemented by Binance, Yahoo Finance, Angel One,
@@ -32,8 +39,16 @@ type HistoricalCandleRequest struct {
 // request. The adapter owns authentication, pagination, rate limits, response
 // parsing, and conversion into database.MarketCandleInput.
 type HistoricalMarketDataProvider interface {
-	ProviderName() string
+	MarketDataProvider
 	FetchHistoricalCandles(context.Context, HistoricalCandleRequest) ([]database.MarketCandleInput, error)
+}
+
+// MarketDataProvider is the common metadata contract shared by historical and
+// live adapters. Capabilities are declared by the adapter, so callers can
+// reject unsupported work before opening a network connection.
+type MarketDataProvider interface {
+	ProviderName() string
+	Capabilities() ProviderCapabilities
 }
 
 // MacroObservationInput contains one normalized macro observation produced by a CSV reader.

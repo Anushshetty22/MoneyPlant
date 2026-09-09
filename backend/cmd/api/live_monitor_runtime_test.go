@@ -277,6 +277,10 @@ type runtimeScriptedProvider struct {
 
 func (p *runtimeScriptedProvider) ProviderName() string { return "fixture" }
 
+func (p *runtimeScriptedProvider) Capabilities() ingestion.ProviderCapabilities {
+	return ingestion.ProviderCapabilities{Live: true}
+}
+
 func (p *runtimeScriptedProvider) OpenTradeStream(context.Context, ingestion.LiveMarketStreamRequest) (ingestion.LiveMarketStream, error) {
 	if p.index >= len(p.streams) {
 		return nil, fmt.Errorf("no scripted stream remains")

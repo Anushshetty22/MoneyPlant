@@ -106,7 +106,15 @@ func NewYahooMarketDataProviderWithFallbacks(client *http.Client, baseURLs ...st
 
 // ProviderName identifies Yahoo Finance in ingestion provenance and audit rows.
 func (p *YahooMarketDataProvider) ProviderName() string {
-	return "yahoo"
+	return string(ProviderYahoo)
+}
+
+// Capabilities describes the intentionally narrow Yahoo fallback contract.
+func (p *YahooMarketDataProvider) Capabilities() ProviderCapabilities {
+	return ProviderCapabilities{
+		Historical:         true,
+		SupportedIntervals: []MarketInterval{Interval1d},
+	}
 }
 
 // FetchHistoricalCandles retrieves unadjusted Yahoo chart rows in [From, To).

@@ -76,7 +76,16 @@ func NewBinanceMarketDataProvider(client *http.Client, baseURL string) (*Binance
 
 // ProviderName identifies Binance in ingestion_runs and source provenance.
 func (p *BinanceMarketDataProvider) ProviderName() string {
-	return "binance"
+	return string(ProviderBinance)
+}
+
+// Capabilities describes the normalized historical work supported by this
+// adapter. Live streaming is exposed by the separate Binance live adapter.
+func (p *BinanceMarketDataProvider) Capabilities() ProviderCapabilities {
+	return ProviderCapabilities{
+		Historical:         true,
+		SupportedIntervals: []MarketInterval{Interval1m, Interval5m, Interval15m, Interval30m, Interval1h, Interval4h, Interval1d, Interval1w},
+	}
 }
 
 // FetchHistoricalCandles retrieves a half-open [From, To) time range.

@@ -4,10 +4,11 @@ MoneyPlant is a local-first financial data engineering and analytics project. It
 
 ## Current milestone
 
-Phase 1 development and Phase 8 integration are complete, and Phase 2.1
-infrastructure work is now in progress. The project is intentionally
-implemented incrementally, with each sub-phase producing a testable result and
-a short learning checkpoint.
+Phase 1 and Phase 2 are complete. Phase 3.1 is now freezing the unified
+canonical/provider market-data model before Angel One integration and
+multi-symbol monitoring are added. The project is intentionally implemented
+incrementally, with each sub-phase producing a testable result and a short
+learning checkpoint.
 
 ## Current progress
 
@@ -18,6 +19,8 @@ a short learning checkpoint.
 - Angel One integration is deferred until API setup is available.
 - PostgreSQL now has a Docker Compose definition with persistent storage,
   health checks, and first-start migration initialization.
+- Phase 3.1 shared contracts now distinguish canonical symbols, provider
+  symbols/tokens, provider capabilities, monitor states, and market errors.
 
 See [`docs/project-guide.md`](docs/project-guide.md) for the consolidated
 setup, architecture, database, API, troubleshooting, and Phase 2 guide.

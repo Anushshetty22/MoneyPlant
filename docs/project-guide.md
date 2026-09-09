@@ -371,10 +371,9 @@ The more detailed command-by-command workflow is in
   does not archive every raw trade or monitor multiple symbols at once.
 - The project does not provide investment advice or automated trading.
 
-## 11. Phase 2 status and preparation
+## 11. Phase 2 status and Phase 3 preparation
 
-Phase 2.17 documentation and final verification are in progress. Phase 2 now
-includes
+Phase 2 is complete. It includes
 `infra/compose.yaml`, which runs PostgreSQL with a named volume, a health
 check, and automatic first-start execution of the ordered migrations. The
 backend and frontend remain local developer processes in this first
@@ -399,6 +398,12 @@ status endpoint and dashboard distinguish `disabled`, `starting`, `running`,
 `reconnecting`, `stopped`, and `error` states. Reconnect details and database
 persistence warnings remain separate so one failure does not hide the other.
 
+Phase 3.1 is now freezing the shared market-data model. The canonical/provider
+identity, provider capability, lifecycle status, and common error contracts are
+documented in [`docs/phase-3-data-model.md`](phase-3-data-model.md). The
+current live monitor remains one-symbol and Binance-only until the later Phase
+3 sub-phases generalize it.
+
 The next planned capabilities are:
 
 - More robust scheduling and operational monitoring beyond the current local
@@ -418,4 +423,5 @@ idempotency behavior, and testing workflow remain stable.
 - `docs/database-design.md` — detailed relational design
 - `docs/ingestion-runbook.md` — complete local workflow
 - `docs/learning-notes.md` — concepts, commands, and problems learned
+- `docs/phase-3-data-model.md` — canonical/provider identity and shared Phase 3 contracts
 - `docs/document-style-guide.md` — shared document formatting rules

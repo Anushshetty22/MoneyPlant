@@ -37,6 +37,15 @@ func (p *FixtureMarketDataProvider) ProviderName() string {
 	return p.name
 }
 
+// Capabilities makes the offline fixture satisfy the same metadata contract
+// as a real historical provider. Fixtures can contain any normalized interval.
+func (p *FixtureMarketDataProvider) Capabilities() ProviderCapabilities {
+	return ProviderCapabilities{
+		Historical:         true,
+		SupportedIntervals: AllMarketIntervals(),
+	}
+}
+
 // FetchHistoricalCandles filters fixture rows by interval and half-open time range.
 //
 // The filtering behavior intentionally matches the market repository query:
