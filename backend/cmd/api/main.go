@@ -26,7 +26,6 @@ import (
 	"github.com/Anushshetty22/MoneyPlant/backend/internal/database"
 	"github.com/Anushshetty22/MoneyPlant/backend/internal/httpapi"
 	"github.com/Anushshetty22/MoneyPlant/backend/internal/ingestion"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // main is the first function executed when the API program starts.
@@ -212,8 +211,6 @@ func startOptionalLiveMonitor(
 			log.Printf("live monitor setup error: %v", err)
 			return
 		}
-		defer stream.Close()
-
 		monitor, err := ingestion.NewLiveMarketMonitor(stream)
 		if err != nil {
 			statusStore.MarkError(err)
@@ -221,95 +218,18 @@ func startOptionalLiveMonitor(
 			return
 		}
 
-		statusStore.MarkRunning()
-		var lastPersistenceAttemptAt time.Time
-		handleEvent := func(eventContext context.Context, event ingestion.LiveMarketEvent) error {
-			if err := store.Handle(eventContext, event); err != nil {
-				return err
-			}
-			statusStore.RecordAccepted(event)
-			// Persist at most once every five seconds during the open-ended
-			// stream. The in-memory store remains current for every event, while
-			// PostgreSQL receives a restart-safe latest value without one write
-			// per trade.
-			if lastPersistenceAttemptAt.IsZero() || time.Since(lastPersistenceAttemptAt) >= 5*time.Second {
-				lastPersistenceAttemptAt = time.Now()
-				if err := persistLiveSnapshot(eventContext, snapshotRepository, event); err != nil {
-					statusStore.RecordPersistenceError(err)
-					log.Printf("persist live snapshot: %v", err)
-				} else {
-					statusStore.RecordPersistenceSuccess()
-				}
-			}
-			return nil
-		}
-		result, err := monitor.Run(ctx, handleEvent)
-		if result.LastEvent != nil {
-			persistContext, cancelPersist := context.WithTimeout(context.Background(), 2*time.Second)
-			if persistErr := persistLiveSnapshot(persistContext, snapshotRepository, *result.LastEvent); persistErr != nil {
-				statusStore.RecordPersistenceError(persistErr)
-				log.Printf("persist final live snapshot: %v", persistErr)
-			} else {
-				statusStore.RecordPersistenceSuccess()
-			}
-			cancelPersist()
-		}
-		statusStore.RecordResult(result, err)
-		if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
-			log.Printf("live monitor stopped with error: %v", err)
-		}
+		persist := liveSnapshotPersistence(func(persistContext context.Context, event ingestion.LiveMarketEvent) error {
+			return persistLiveSnapshot(persistContext, snapshotRepository, event)
+		})
+		result, _ := runLiveMonitor(
+			ctx,
+			monitor,
+			store,
+			statusStore,
+			persist,
+			5*time.Second,
+			2*time.Second,
+		)
 		log.Printf("live monitor summary: received=%d accepted=%d rejected=%d snapshots=%d", result.Received, result.Accepted, result.Rejected, store.Count())
 	}()
-}
-
-// restoreDurableLiveSnapshots seeds the fast in-memory store from PostgreSQL
-// before the API begins serving requests. A missing Phase 2.12 migration is
-// logged but does not prevent the live API from starting for local learning.
-func restoreDurableLiveSnapshots(
-	ctx context.Context,
-	repository *database.LiveMarketSnapshotRepository,
-	store *ingestion.LiveMarketSnapshotStore,
-) int {
-	rows, err := repository.List(ctx)
-	if err != nil {
-		log.Printf("restore durable live snapshots: %v", err)
-		return 0
-	}
-	restoredCount := 0
-	for _, row := range rows {
-		event := ingestion.LiveMarketEvent{
-			ProviderSymbol:   row.ProviderSymbol,
-			EventType:        row.EventType,
-			ObservedAt:       row.ObservedAt.Time,
-			Price:            row.Price,
-			Quantity:         row.Quantity,
-			SourceReceivedAt: row.SourceReceivedAt.Time,
-		}
-		if err := store.Handle(ctx, event); err != nil {
-			log.Printf("restore durable live snapshot for %s: %v", row.ProviderSymbol, err)
-			continue
-		}
-		restoredCount++
-	}
-	if len(rows) > 0 {
-		log.Printf("restored %d durable live snapshot(s)", restoredCount)
-	}
-	return restoredCount
-}
-
-func persistLiveSnapshot(
-	ctx context.Context,
-	repository *database.LiveMarketSnapshotRepository,
-	event ingestion.LiveMarketEvent,
-) error {
-	_, err := repository.Upsert(ctx, database.LiveMarketSnapshotInput{
-		Provider:         "binance",
-		ProviderSymbol:   event.ProviderSymbol,
-		EventType:        event.EventType,
-		ObservedAt:       pgtype.Timestamptz{Time: event.ObservedAt, Valid: true},
-		Price:            event.Price,
-		Quantity:         event.Quantity,
-		SourceReceivedAt: pgtype.Timestamptz{Time: event.SourceReceivedAt, Valid: true},
-	})
-	return err
 }
