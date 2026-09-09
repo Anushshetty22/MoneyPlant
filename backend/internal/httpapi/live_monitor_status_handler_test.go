@@ -3,6 +3,8 @@ package httpapi_test
 import (
 	// encoding/json decodes the public status envelope.
 	"encoding/json"
+	// errors provides a deterministic reconnect error for the status contract.
+	"errors"
 	// net/http provides request and status-code constants.
 	"net/http"
 	// net/http/httptest serves the real API handler without a machine port.
@@ -22,6 +24,7 @@ func TestLiveMonitorStatusEndpointReturnsOperationalState(t *testing.T) {
 	statusStore := ingestion.NewLiveMonitorStatusStore()
 	statusStore.Configure("binance", "BTCUSDT")
 	statusStore.MarkRunning()
+	statusStore.RecordReconnect(errors.New("temporary Binance disconnect"))
 
 	eventTime := time.Date(2026, time.September, 8, 12, 30, 0, 0, time.UTC)
 	statusStore.RecordAccepted(ingestion.LiveMarketEvent{
@@ -58,6 +61,7 @@ func TestLiveMonitorStatusEndpointReturnsOperationalState(t *testing.T) {
 			Persisted            int64   `json:"persisted"`
 			Restored             int64   `json:"restored"`
 			LastError            *string `json:"last_error"`
+			LastReconnectError   *string `json:"last_reconnect_error"`
 			LastPersistedAt      *string `json:"last_persisted_at"`
 			LastPersistenceError *string `json:"last_persistence_error"`
 		} `json:"data"`
@@ -75,8 +79,11 @@ func TestLiveMonitorStatusEndpointReturnsOperationalState(t *testing.T) {
 	if envelope.Data.Accepted != 1 {
 		t.Fatalf("accepted = %d, want 1", envelope.Data.Accepted)
 	}
-	if envelope.Data.Reconnects != 0 {
-		t.Fatalf("reconnects = %d, want 0", envelope.Data.Reconnects)
+	if envelope.Data.Reconnects != 1 {
+		t.Fatalf("reconnects = %d, want 1", envelope.Data.Reconnects)
+	}
+	if envelope.Data.LastReconnectError == nil || *envelope.Data.LastReconnectError != "temporary Binance disconnect" {
+		t.Fatalf("last_reconnect_error = %#v, want temporary Binance disconnect", envelope.Data.LastReconnectError)
 	}
 	if envelope.Data.Persisted != 0 || envelope.Data.Restored != 0 || envelope.Data.LastPersistedAt != nil || envelope.Data.LastPersistenceError != nil {
 		t.Fatalf("unexpected persistence status: %#v", envelope.Data)

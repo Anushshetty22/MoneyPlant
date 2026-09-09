@@ -26,6 +26,7 @@ type liveMonitorStatusResponse struct {
 	LastEventSourceReceivedAt *string `json:"last_event_source_received_at"`
 	LastPersistedAt           *string `json:"last_persisted_at"`
 	LastError                 *string `json:"last_error"`
+	LastReconnectError        *string `json:"last_reconnect_error"`
 	LastPersistenceError      *string `json:"last_persistence_error"`
 	UpdatedAt                 string  `json:"updated_at"`
 }
@@ -72,6 +73,10 @@ func liveMonitorStatusHandler(
 	if status.LastError != "" {
 		lastError := status.LastError
 		response.LastError = &lastError
+	}
+	if status.LastReconnectError != "" {
+		lastReconnectError := status.LastReconnectError
+		response.LastReconnectError = &lastReconnectError
 	}
 	if status.LastPersistenceError != "" {
 		lastPersistenceError := status.LastPersistenceError

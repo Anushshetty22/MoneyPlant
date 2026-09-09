@@ -82,16 +82,26 @@ function LiveSnapshotCard({
     : false;
   const stateLabel = status?.state ?? "unknown";
   const hasMonitorError = stateLabel === "error";
+  const isReconnecting = stateLabel === "reconnecting";
+  const isDisabled = stateLabel === "disabled";
   const statusDotClass = hasMonitorError
     ? "bg-red-500"
-    : isStale
+    : isReconnecting
       ? "bg-amber-500"
+      : isDisabled
+        ? "bg-slate-300"
+      : isStale
+        ? "bg-amber-500"
       : stateLabel === "running"
         ? "bg-emerald-500"
         : "bg-slate-300";
   const statusLabel = hasMonitorError
     ? "Monitor error"
-    : isStale
+    : isReconnecting
+      ? "Reconnecting"
+      : isDisabled
+        ? "Disabled"
+      : isStale
       ? "Stale data"
       : status?.state === "running"
         ? "Live"
@@ -170,6 +180,9 @@ function LiveSnapshotCard({
 
       {isSupported && status?.last_persistence_error && (
         <p className="mt-3 text-xs text-amber-800">Database save warning: {status.last_persistence_error}</p>
+      )}
+      {isSupported && status?.last_reconnect_error && (
+        <p className="mt-3 text-xs text-amber-800">Reconnect detail: {status.last_reconnect_error}</p>
       )}
     </div>
   );

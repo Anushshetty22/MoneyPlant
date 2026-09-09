@@ -15,11 +15,12 @@ import (
 const (
 	// LiveMonitorState values are deliberately small and human-readable because
 	// they are part of the operational API response.
-	LiveMonitorStateDisabled = "disabled"
-	LiveMonitorStateStarting = "starting"
-	LiveMonitorStateRunning  = "running"
-	LiveMonitorStateStopped  = "stopped"
-	LiveMonitorStateError    = "error"
+	LiveMonitorStateDisabled     = "disabled"
+	LiveMonitorStateStarting     = "starting"
+	LiveMonitorStateRunning      = "running"
+	LiveMonitorStateReconnecting = "reconnecting"
+	LiveMonitorStateStopped      = "stopped"
+	LiveMonitorStateError        = "error"
 )
 
 // LiveMonitorStatus describes the current lifecycle and counters for one
@@ -39,15 +40,23 @@ type LiveMonitorStatus struct {
 	LastEventSourceReceivedAt *time.Time
 	LastPersistedAt           *time.Time
 	LastError                 string
+	LastReconnectError        string
 	LastPersistenceError      string
 	UpdatedAt                 time.Time
 }
 
-// RecordReconnect counts a failed connection attempt that will be retried.
-// A reconnect is not itself a terminal error because the stream may recover.
-func (s *LiveMonitorStatusStore) RecordReconnect() {
+// RecordReconnect counts a failed connection attempt that will be retried and
+// makes the temporary reconnect state visible to API clients. A reconnect is
+// not a terminal error because the stream may recover on the next attempt.
+func (s *LiveMonitorStatusStore) RecordReconnect(reconnectErrors ...error) {
 	s.mu.Lock()
 	s.status.Reconnects++
+	s.status.State = LiveMonitorStateReconnecting
+	if len(reconnectErrors) > 0 && reconnectErrors[0] != nil {
+		s.status.LastReconnectError = reconnectErrors[0].Error()
+	} else {
+		s.status.LastReconnectError = "unknown reconnect error"
+	}
 	s.status.UpdatedAt = time.Now().UTC()
 	s.mu.Unlock()
 }
@@ -115,6 +124,7 @@ func (s *LiveMonitorStatusStore) Configure(provider, providerSymbol string) {
 	s.status.ProviderSymbol = providerSymbol
 	s.status.State = LiveMonitorStateStarting
 	s.status.LastError = ""
+	s.status.LastReconnectError = ""
 	s.status.UpdatedAt = time.Now().UTC()
 	s.mu.Unlock()
 }
@@ -134,6 +144,11 @@ func (s *LiveMonitorStatusStore) MarkRunning() {
 func (s *LiveMonitorStatusStore) RecordAccepted(event LiveMarketEvent) {
 	s.mu.Lock()
 	s.status.Accepted++
+	// The first accepted event after a retry proves that the replacement
+	// connection is healthy again, so transition back to running.
+	if s.status.State == LiveMonitorStateReconnecting {
+		s.status.State = LiveMonitorStateRunning
+	}
 	// While the monitor is still running, only accepted callbacks have reached
 	// this store. Keep received at least as large as accepted so the in-progress
 	// API response never reports an impossible accepted > received combination.

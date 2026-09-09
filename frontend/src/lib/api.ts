@@ -80,7 +80,7 @@ export type LiveMonitorStatus = {
   enabled: boolean;
   provider: string;
   provider_symbol: string;
-  state: "disabled" | "starting" | "running" | "stopped" | "error";
+  state: "disabled" | "starting" | "running" | "reconnecting" | "stopped" | "error";
   received: number;
   accepted: number;
   rejected: number;
@@ -91,6 +91,7 @@ export type LiveMonitorStatus = {
   last_event_source_received_at: string | null;
   last_persisted_at: string | null;
   last_error: string | null;
+  last_reconnect_error: string | null;
   last_persistence_error: string | null;
   updated_at: string;
 };

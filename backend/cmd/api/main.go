@@ -105,7 +105,7 @@ func main() {
 	// monitoring is disabled because it simply remains empty.
 	liveSnapshotStore := ingestion.NewLiveMarketSnapshotStore()
 	liveMonitorStatusStore := ingestion.NewLiveMonitorStatusStore()
-	restoreContext, cancelRestore := context.WithTimeout(context.Background(), 3*time.Second)
+	restoreContext, cancelRestore := context.WithTimeout(context.Background(), cfg.LiveMonitorRestoreTimeout)
 	restoredSnapshotCount := restoreDurableLiveSnapshots(restoreContext, liveMarketSnapshotRepository, liveSnapshotStore)
 	cancelRestore()
 	liveMonitorStatusStore.RecordRestored(restoredSnapshotCount)
@@ -198,8 +198,8 @@ func startOptionalLiveMonitor(
 
 		policy := ingestion.DefaultLiveReconnectPolicy()
 		policy.MaxRetries = cfg.LiveMonitorMaxRetries
-		policy.OnRetry = func(_ error, _ time.Duration) {
-			statusStore.RecordReconnect()
+		policy.OnRetry = func(reconnectErr error, _ time.Duration) {
+			statusStore.RecordReconnect(reconnectErr)
 		}
 		stream, err := ingestion.NewReconnectingLiveMarketStream(
 			provider,
@@ -227,8 +227,8 @@ func startOptionalLiveMonitor(
 			store,
 			statusStore,
 			persist,
-			5*time.Second,
-			2*time.Second,
+			cfg.LiveMonitorPersistenceInterval,
+			cfg.LiveMonitorFinalPersistenceTimeout,
 		)
 		log.Printf("live monitor summary: received=%d accepted=%d rejected=%d snapshots=%d", result.Received, result.Accepted, result.Rejected, store.Count())
 	}()
