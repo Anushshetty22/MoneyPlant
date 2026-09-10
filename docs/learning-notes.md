@@ -50,6 +50,7 @@ Use this file as a running project notebook. Keep entries short and practical.
 | 2026-09-09 | Finish Phase 2 with a documented restart-recovery workflow | A live feature is only complete when its startup, shutdown, failure, and recovery behavior can be repeated by the learner |
 | 2026-09-09 | Freeze canonical instrument, provider identity, capability, status, and error contracts before adding Angel One | Stable shared vocabulary prevents provider-specific symbols, tokens, and failures from leaking into the dashboard or warehouse model |
 | 2026-09-10 | Key live snapshots and statuses by provider plus provider symbol | The same provider symbol is not a safe global identity once multiple market sources are monitored |
+| 2026-09-10 | Resolve Angel One tokens from the current instrument master and upsert them by provider symbol | Provider tokens are external identifiers that can change, so migrations and application code must not hardcode them |
 
 ## Problems and solutions
 

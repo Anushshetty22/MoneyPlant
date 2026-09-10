@@ -90,6 +90,47 @@ func (r *InstrumentSourceRepository) Create(
 	), nil
 }
 
+// Upsert refreshes one provider mapping from the current provider catalog.
+// This is especially important for Angel One because symbol tokens are
+// provider-owned values and must not be treated as permanent application data.
+func (r *InstrumentSourceRepository) Upsert(
+	ctx context.Context,
+	instrumentID int64,
+	provider string,
+	providerSymbol string,
+	providerInstrumentID *string,
+	isAuthoritative bool,
+	metadata []byte,
+) (InstrumentSource, error) {
+	providerID := pgtype.Text{}
+	if providerInstrumentID != nil {
+		providerID = pgtype.Text{String: *providerInstrumentID, Valid: true}
+	}
+
+	row, err := r.queries.UpsertInstrumentSource(ctx, generated.UpsertInstrumentSourceParams{
+		InstrumentID:         instrumentID,
+		Provider:             provider,
+		ProviderSymbol:       providerSymbol,
+		ProviderInstrumentID: providerID,
+		IsAuthoritative:      isAuthoritative,
+		Metadata:             metadata,
+	})
+	if err != nil {
+		return InstrumentSource{}, fmt.Errorf("upsert %s source %q: %w", provider, providerSymbol, err)
+	}
+
+	return instrumentSourceFromGenerated(
+		row.ID,
+		row.InstrumentID,
+		row.Provider,
+		row.ProviderSymbol,
+		row.ProviderInstrumentID,
+		row.IsAuthoritative,
+		row.IsActive,
+		row.Metadata,
+	), nil
+}
+
 // ListByCanonicalSymbol returns all provider mappings for one canonical instrument.
 //
 // The generated query performs the join from instruments to instrument_sources,

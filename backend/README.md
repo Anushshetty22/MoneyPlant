@@ -2,6 +2,22 @@
 
 The Go ingestion engine and read-only REST API will be implemented here.
 
+## Phase 3.3 Angel One instrument catalog
+
+Refresh the six canonical Indian-market mappings from a local Angel One master
+file. This command requires no Angel One credentials; it parses the provider
+file, resolves the current tokens, and upserts `instrument_sources`:
+
+```bash
+go run ./cmd/catalog-angelone \
+  --file testdata/angel_one_instrument_master.json
+```
+
+Use the latest local `OpenAPIScripMaster.json` in place of the fixture when
+refreshing real provider tokens. See
+[`docs/phase-3.3-angel-one-catalog.md`](../docs/phase-3.3-angel-one-catalog.md)
+for the resolver rules and failure cases.
+
 ## Phase 4.2 Binance ingestion command
 
 After PostgreSQL is running and migrations plus seed definitions have been applied,

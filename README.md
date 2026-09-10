@@ -4,10 +4,9 @@ MoneyPlant is a local-first financial data engineering and analytics project. It
 
 ## Current milestone
 
-Phase 1 and Phase 2 are complete. Phase 3.2 is now adding independent
-multi-symbol live monitoring on top of the frozen canonical/provider model
-before Angel One integration and
-multi-symbol monitoring are added. The project is intentionally implemented
+Phase 1 and Phase 2 are complete. Phase 3.3 is now adding the Angel One
+instrument catalog on top of the frozen canonical/provider model and the
+independent multi-symbol live monitoring foundation. The project is intentionally implemented
 incrementally, with each sub-phase producing a testable result and a short
 learning checkpoint.
 
@@ -23,6 +22,8 @@ learning checkpoint.
 - Phase 3.1 shared contracts now distinguish canonical symbols, provider
   symbols/tokens, provider capabilities, monitor states, and market errors.
 - Phase 3.2 supports independent live monitors through `LIVE_MONITOR_SYMBOLS`.
+- Phase 3.3 resolves the six initial Angel One instruments from a local
+  instrument-master file without hardcoding provider tokens.
 
 See [`docs/project-guide.md`](docs/project-guide.md) for the consolidated
 setup, architecture, database, API, troubleshooting, and Phase 2 guide.

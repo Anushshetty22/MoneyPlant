@@ -23,6 +23,36 @@ RETURNING
     is_active,
     metadata;
 
+-- name: UpsertInstrumentSource :one
+-- Refreshes a provider mapping from the latest instrument master. The provider
+-- symbol is the stable natural key for the catalog row; the token is replaced
+-- whenever Angel One publishes a new value.
+INSERT INTO instrument_sources (
+    instrument_id,
+    provider,
+    provider_symbol,
+    provider_instrument_id,
+    is_authoritative,
+    metadata
+)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (provider, provider_symbol) DO UPDATE SET
+    instrument_id = EXCLUDED.instrument_id,
+    provider_instrument_id = EXCLUDED.provider_instrument_id,
+    is_authoritative = EXCLUDED.is_authoritative,
+    is_active = TRUE,
+    metadata = EXCLUDED.metadata,
+    updated_at = NOW()
+RETURNING
+    id,
+    instrument_id,
+    provider,
+    provider_symbol,
+    provider_instrument_id,
+    is_authoritative,
+    is_active,
+    metadata;
+
 -- name: ListInstrumentSourcesByCanonicalSymbol :many
 -- Returns every active and inactive provider mapping for one canonical symbol.
 -- Joining through instruments lets callers use MoneyPlant's stable symbol instead

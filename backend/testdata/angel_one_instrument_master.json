@@ -1,0 +1,8 @@
+[
+  {"token":"fixture-nifty50-token","symbol":"NIFTY","name":"NIFTY","expiry":"","strike":"-1.000000","lotsize":"1","instrumenttype":"AMXIDX","exch_seg":"nse_cm","tick_size":"5.000000"},
+  {"token":"fixture-sbin-token","symbol":"SBIN-EQ","name":"SBIN","expiry":"","strike":"-1.000000","lotsize":"1","instrumenttype":"","exch_seg":"nse_cm","tick_size":"5.000000"},
+  {"token":"fixture-reliance-token","symbol":"RELIANCE-EQ","name":"RELIANCE","expiry":"","strike":"-1.000000","lotsize":"1","instrumenttype":"","exch_seg":"nse_cm","tick_size":"5.000000"},
+  {"token":"fixture-tcs-token","symbol":"TCS-EQ","name":"TCS","expiry":"","strike":"-1.000000","lotsize":"1","instrumenttype":"","exch_seg":"nse_cm","tick_size":"5.000000"},
+  {"token":"fixture-infy-token","symbol":"INFY-EQ","name":"INFY","expiry":"","strike":"-1.000000","lotsize":"1","instrumenttype":"","exch_seg":"nse_cm","tick_size":"5.000000"},
+  {"token":"fixture-hdfcbank-token","symbol":"HDFCBANK-EQ","name":"HDFCBANK","expiry":"","strike":"-1.000000","lotsize":"1","instrumenttype":"","exch_seg":"nse_cm","tick_size":"5.000000"}
+]

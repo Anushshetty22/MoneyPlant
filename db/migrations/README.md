@@ -9,7 +9,7 @@ be inspected while learning.
 The Phase 2.1 Compose service mounts this directory at PostgreSQL’s
 `/docker-entrypoint-initdb.d` directory. The official PostgreSQL image runs
 the files alphabetically when the data volume is empty, so the numeric prefixes
-(`001_` through `008_`) are significant:
+(`001_` through `009_`) are significant:
 
 ```text
 001 instruments
@@ -20,6 +20,7 @@ the files alphabetically when the data volume is empty, so the numeric prefixes
 006 ingestion audit records
 007 initial definitions
 008 latest live market snapshots
+009 Angel One canonical instruments
 ```
 
 This initialization mechanism is suitable for the local learning database. It
@@ -34,4 +35,12 @@ For an existing local volume, apply the new Phase 2.12 table explicitly once:
 PGPASSWORD=change-me-locally psql \
   -h localhost -p 5432 -U moneyplant -d moneyplant \
   -f db/migrations/008_create_live_market_snapshots.sql
+```
+
+Then apply the Phase 3.3 canonical-instrument seed:
+
+```bash
+PGPASSWORD=change-me-locally psql \
+  -h localhost -p 5432 -U moneyplant -d moneyplant \
+  -f db/migrations/009_seed_angel_one_instruments.sql
 ```

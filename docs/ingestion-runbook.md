@@ -12,7 +12,7 @@ every step.
 | NSE EOD candles | Yahoo Finance | `go run ./cmd/ingest-yahoo` | Real ingestion working with retry/fallback |
 | CPI | RBI DBIE CSV | `go run ./cmd/seed-macro` | Sample CSV working; official export pending |
 | RBI repo rate | RBI DBIE CSV | `go run ./cmd/seed-macro` | Sample CSV working; official export pending |
-| Indian equities/indexes | Angel One | Not currently available | Deferred until API setup is ready |
+| Angel One instrument catalog | Angel One master JSON | `go run ./cmd/catalog-angelone` | Credential-free mapping working; market ingestion deferred |
 
 ## 2. Prerequisites
 
@@ -50,8 +50,9 @@ done
 ```
 
 The migration files contain their own transaction boundaries. The final seed
-migration creates the initial instruments, provider mappings, and macro dataset
-definitions.
+migrations create the initial instruments, provider mappings, and macro dataset
+definitions. Migration `009` adds the six canonical Angel One instruments; the
+catalog command fills their provider symbols and current tokens.
 
 Do not run this loop against the already-migrated learning database unless you
 intend to work through the expected “already exists” errors. The project does
