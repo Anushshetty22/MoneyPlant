@@ -49,6 +49,18 @@ type Config struct {
 	LiveMonitorFinalPersistenceTimeout time.Duration
 	// LiveMonitorRestoreTimeout bounds startup restoration before HTTP serving.
 	LiveMonitorRestoreTimeout time.Duration
+
+	// Angel One credentials are read only from the process environment. They are
+	// passed to the authentication client but are never persisted in Config logs
+	// or database records by the application.
+	AngelOneAPIKey         string
+	AngelOneClientCode     string
+	AngelOnePassword       string
+	AngelOneTOTPSecret     string
+	AngelOneBaseURL        string
+	AngelOneClientLocalIP  string
+	AngelOneClientPublicIP string
+	AngelOneMACAddress     string
 }
 
 // Load reads configuration from environment variables and applies local-development defaults.
@@ -119,6 +131,14 @@ func Load() (Config, error) {
 		LiveMonitorPersistenceInterval:     liveMonitorPersistenceInterval,
 		LiveMonitorFinalPersistenceTimeout: liveMonitorFinalPersistenceTimeout,
 		LiveMonitorRestoreTimeout:          liveMonitorRestoreTimeout,
+		AngelOneAPIKey:                     getString("ANGEL_ONE_API_KEY", ""),
+		AngelOneClientCode:                 getString("ANGEL_ONE_CLIENT_CODE", ""),
+		AngelOnePassword:                   getString("ANGEL_ONE_PASSWORD", ""),
+		AngelOneTOTPSecret:                 getString("ANGEL_ONE_TOTP_SECRET", ""),
+		AngelOneBaseURL:                    getString("ANGEL_ONE_BASE_URL", "https://apiconnect.angelone.in"),
+		AngelOneClientLocalIP:              getString("ANGEL_ONE_CLIENT_LOCAL_IP", "127.0.0.1"),
+		AngelOneClientPublicIP:             getString("ANGEL_ONE_CLIENT_PUBLIC_IP", "127.0.0.1"),
+		AngelOneMACAddress:                 getString("ANGEL_ONE_MAC_ADDRESS", "00:00:00:00:00:00"),
 	}
 
 	// Validate the completed configuration before returning it. This is the final

@@ -133,6 +133,29 @@ func TestLoadParsesMultipleLiveMonitorSymbols(t *testing.T) {
 	}
 }
 
+func TestLoadParsesAngelOneConfiguration(t *testing.T) {
+	setRequiredDefaults(t)
+	t.Setenv("ANGEL_ONE_API_KEY", "api-key")
+	t.Setenv("ANGEL_ONE_CLIENT_CODE", "client-code")
+	t.Setenv("ANGEL_ONE_PASSWORD", "pin")
+	t.Setenv("ANGEL_ONE_TOTP_SECRET", "totp-secret")
+	t.Setenv("ANGEL_ONE_BASE_URL", "https://example.test")
+	t.Setenv("ANGEL_ONE_CLIENT_LOCAL_IP", "10.0.0.1")
+	t.Setenv("ANGEL_ONE_CLIENT_PUBLIC_IP", "203.0.113.10")
+	t.Setenv("ANGEL_ONE_MAC_ADDRESS", "00:11:22:33:44:55")
+
+	loaded, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if loaded.AngelOneAPIKey != "api-key" || loaded.AngelOneClientCode != "client-code" || loaded.AngelOnePassword != "pin" || loaded.AngelOneTOTPSecret != "totp-secret" {
+		t.Fatalf("Angel One credentials were not loaded correctly")
+	}
+	if loaded.AngelOneBaseURL != "https://example.test" || loaded.AngelOneClientLocalIP != "10.0.0.1" || loaded.AngelOneClientPublicIP != "203.0.113.10" || loaded.AngelOneMACAddress != "00:11:22:33:44:55" {
+		t.Fatalf("Angel One request settings were not loaded correctly")
+	}
+}
+
 func TestLoadUsesSingularLiveMonitorSymbolAsFallback(t *testing.T) {
 	setRequiredDefaults(t)
 	t.Setenv("LIVE_MONITOR_SYMBOL", "btcusdt")
@@ -180,6 +203,14 @@ func setRequiredDefaults(t *testing.T) {
 		"LIVE_MONITOR_PERSIST_INTERVAL",
 		"LIVE_MONITOR_FINAL_PERSIST_TIMEOUT",
 		"LIVE_MONITOR_RESTORE_TIMEOUT",
+		"ANGEL_ONE_API_KEY",
+		"ANGEL_ONE_CLIENT_CODE",
+		"ANGEL_ONE_PASSWORD",
+		"ANGEL_ONE_TOTP_SECRET",
+		"ANGEL_ONE_BASE_URL",
+		"ANGEL_ONE_CLIENT_LOCAL_IP",
+		"ANGEL_ONE_CLIENT_PUBLIC_IP",
+		"ANGEL_ONE_MAC_ADDRESS",
 	} {
 		t.Setenv(key, "")
 	}

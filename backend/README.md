@@ -2,6 +2,18 @@
 
 The Go ingestion engine and read-only REST API will be implemented here.
 
+## Phase 3.4 Angel One authentication
+
+Copy `.env.example` to `.env` and fill the four local credential values. Then
+verify the login without printing any token values:
+
+```bash
+go run ./cmd/auth-angelone
+```
+
+The JWT, refresh token, and feed token stay in memory for the process. Invalid
+credentials produce a safe provider error without echoing secrets.
+
 ## Phase 3.3 Angel One instrument catalog
 
 Refresh the six canonical Indian-market mappings from a local Angel One master

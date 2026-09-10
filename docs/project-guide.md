@@ -399,8 +399,8 @@ status endpoint and dashboard distinguish `disabled`, `starting`, `running`,
 `reconnecting`, `stopped`, and `error` states. Reconnect details and database
 persistence warnings remain separate so one failure does not hide the other.
 
-Phase 3.3 is now extending the shared market-data model into an Angel One
-instrument catalog. Phase 3.1 froze the canonical/provider identity, provider capability,
+Phase 3.4 is now extending the shared market-data model into credential-safe
+Angel One authentication. Phase 3.1 froze the canonical/provider identity, provider capability,
 lifecycle status, and common error contracts; these are documented in
 [`docs/phase-3-data-model.md`](phase-3-data-model.md). The
 current live monitor remains Binance-only until the later Phase 3 sub-phases
@@ -428,4 +428,5 @@ idempotency behavior, and testing workflow remain stable.
 - `docs/phase-3-data-model.md` — canonical/provider identity and shared Phase 3 contracts
 - `docs/phase-3.2-multi-live-monitor.md` — multiple live-symbol configuration and behavior
 - `docs/phase-3.3-angel-one-catalog.md` — Angel One master parsing, resolution, and persistence
+- `docs/phase-3.4-angel-one-auth.md` — credential-safe Angel One login and token refresh
 - `docs/document-style-guide.md` — shared document formatting rules
