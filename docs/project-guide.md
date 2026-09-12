@@ -25,9 +25,9 @@ The completed Phase 1 system can:
 - Expose read-only REST endpoints through Go.
 - Display market and macro time series in a Next.js dashboard.
 
-Angel One network ingestion is intentionally deferred until API credentials and
-the required application configuration are available. Phase 3.3 now supports
-credential-free instrument-master parsing and catalog mapping.
+Angel One now supports credential-safe authentication, instrument-master token
+resolution, and historical candle ingestion through the same normalized and
+idempotent pipeline as the other providers.
 
 ## 3. System architecture
 
@@ -362,7 +362,8 @@ The more detailed command-by-command workflow is in
 
 - RBI data currently uses reviewed learning CSV fixtures; an automated official
   RBI export is not yet implemented.
-- Angel One ingestion is deferred until API application setup is available.
+- Angel One historical ingestion requires the local SmartAPI credentials and a
+  current catalog refresh before a provider token can be used.
 - Phase 1 historical ingestion is batch-oriented. Phase 2 adds optional
   Binance WebSocket monitoring for one configured symbol.
 - The dashboard is read-only and has no authentication.
@@ -399,12 +400,12 @@ status endpoint and dashboard distinguish `disabled`, `starting`, `running`,
 `reconnecting`, `stopped`, and `error` states. Reconnect details and database
 persistence warnings remain separate so one failure does not hide the other.
 
-Phase 3.4 is now extending the shared market-data model into credential-safe
-Angel One authentication. Phase 3.1 froze the canonical/provider identity, provider capability,
+Phase 3.5 now extends the shared market-data model into authenticated Angel One
+historical candles. Phase 3.1 froze the canonical/provider identity, provider capability,
 lifecycle status, and common error contracts; these are documented in
 [`docs/phase-3-data-model.md`](phase-3-data-model.md). The
-current live monitor remains Binance-only until the later Phase 3 sub-phases
-add Angel One.
+current live monitor remains Binance-only until the later Phase 3 sub-phases add
+the Angel One WebSocket decoder and connection.
 
 The next planned capabilities are:
 
@@ -429,4 +430,5 @@ idempotency behavior, and testing workflow remain stable.
 - `docs/phase-3.2-multi-live-monitor.md` — multiple live-symbol configuration and behavior
 - `docs/phase-3.3-angel-one-catalog.md` — Angel One master parsing, resolution, and persistence
 - `docs/phase-3.4-angel-one-auth.md` — credential-safe Angel One login and token refresh
+- `docs/phase-3.5-angel-one-historical.md` — authenticated historical candle ingestion
 - `docs/document-style-guide.md` — shared document formatting rules

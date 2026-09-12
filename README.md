@@ -4,9 +4,9 @@ MoneyPlant is a local-first financial data engineering and analytics project. It
 
 ## Current milestone
 
-Phase 1 and Phase 2 are complete. Phase 3.4 is now adding credential-safe
-Angel One authentication on top of the catalog, frozen canonical/provider
-model, and independent multi-symbol live monitoring foundation. The project is intentionally implemented
+Phase 1 and Phase 2 are complete. Phase 3.5 now imports Angel One historical
+candles through the credential-safe authentication, catalog, and normalized
+market-data foundations. The project is intentionally implemented
 incrementally, with each sub-phase producing a testable result and a short
 learning checkpoint.
 
@@ -16,7 +16,8 @@ learning checkpoint.
 - Binance real candle ingestion is working.
 - Yahoo Finance NSE EOD fallback ingestion is working.
 - CPI and RBI repo-rate CSV seeding is working with learning fixtures.
-- Angel One integration is deferred until API setup is available.
+- Angel One authentication and historical candle ingestion are working through
+  the local credential setup and shared market pipeline.
 - PostgreSQL now has a Docker Compose definition with persistent storage,
   health checks, and first-start migration initialization.
 - Phase 3.1 shared contracts now distinguish canonical symbols, provider
@@ -26,6 +27,8 @@ learning checkpoint.
   instrument-master file without hardcoding provider tokens.
 - Phase 3.4 authenticates with Angel One using local environment credentials;
   session tokens remain in memory and are never logged.
+- Phase 3.5 imports Angel One historical candles with bounded provider windows,
+  UTC timestamps, exact decimals, and idempotent warehouse upserts.
 
 See [`docs/project-guide.md`](docs/project-guide.md) for the consolidated
 setup, architecture, database, API, troubleshooting, and Phase 2 guide.

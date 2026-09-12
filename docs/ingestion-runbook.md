@@ -12,7 +12,8 @@ every step.
 | NSE EOD candles | Yahoo Finance | `go run ./cmd/ingest-yahoo` | Real ingestion working with retry/fallback |
 | CPI | RBI DBIE CSV | `go run ./cmd/seed-macro` | Sample CSV working; official export pending |
 | RBI repo rate | RBI DBIE CSV | `go run ./cmd/seed-macro` | Sample CSV working; official export pending |
-| Angel One instrument catalog | Angel One master JSON | `go run ./cmd/catalog-angelone` | Credential-free mapping working; market ingestion deferred |
+| Angel One instrument catalog | Angel One master JSON | `go run ./cmd/catalog-angelone` | Credential-free mapping working |
+| Angel One historical candles | SmartAPI historical API | `go run ./cmd/ingest-angelone` | Authenticated normalized ingestion working |
 
 ## 2. Prerequisites
 
@@ -132,7 +133,28 @@ the same file again updates existing rows instead of creating duplicates. The
 sample files are learning fixtures; replace them with reviewed official RBI
 exports before using them as final project data.
 
-## 8. Inspect stored data
+## 8. Ingest Angel One historical candles
+
+The Angel One command requires the four local credential variables described in
+`docs/phase-3.4-angel-one-auth.md`. Refresh the catalog first so provider
+tokens are current:
+
+```bash
+go run ./cmd/catalog-angelone --file testdata/angel_one_instrument_master.json
+
+go run ./cmd/ingest-angelone \
+  --symbol NIFTY50 \
+  --interval 1d \
+  --from 2026-08-01T00:00:00Z \
+  --to 2026-08-07T00:00:00Z
+```
+
+The end timestamp is exclusive. Supported intervals are `1m`, `5m`, `15m`,
+`30m`, `1h`, and `1d`. Large ranges are split according to Angel One's
+interval-specific request limits, while the shared pipeline validates and
+upserts each normalized candle. Repeat runs are safe.
+
+## 9. Inspect stored data
 
 Market candles by provider:
 
@@ -174,7 +196,7 @@ PGPASSWORD=change-me-locally psql \
       LIMIT 20;"
 ```
 
-## 9. Repeat-run behavior
+## 10. Repeat-run behavior
 
 | Operation | Repeat behavior |
 |---|---|
@@ -187,7 +209,7 @@ Market-candle upsert behavior is implemented in the repository. Repeating a
 market-provider window is safe: existing natural-key rows are refreshed and the
 ingestion run reports them under `rows_updated`.
 
-## 10. Troubleshooting guide
+## 11. Troubleshooting guide
 
 ### PostgreSQL connection refused
 
@@ -222,7 +244,7 @@ Inspect `rows_inserted`, `rows_updated`, `rows_rejected`, and `error_message`.
 The run is deliberately retained so the failure is visible instead of being
 hidden by a command retry.
 
-## 11. Run the live monitor with the API
+## 12. Run the live monitor with the API
 
 From `backend/`, start the API with one Binance symbol enabled:
 
@@ -268,7 +290,7 @@ returns it to `running`. A permanent stream failure becomes `error`. Database
 save problems appear in `last_persistence_error` without falsely marking a
 healthy stream as failed.
 
-## 12. Verify restart recovery
+## 13. Verify restart recovery
 
 1. Start PostgreSQL and the API with `LIVE_MONITOR_SYMBOL=BTCUSDT`.
 2. Wait until `accepted` and `persisted` are greater than zero.

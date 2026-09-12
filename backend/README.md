@@ -30,6 +30,25 @@ refreshing real provider tokens. See
 [`docs/phase-3.3-angel-one-catalog.md`](../docs/phase-3.3-angel-one-catalog.md)
 for the resolver rules and failure cases.
 
+## Phase 3.5 Angel One historical candles
+
+After refreshing the provider catalog, import a bounded historical range through
+the shared normalized candle pipeline:
+
+```bash
+go run ./cmd/ingest-angelone \
+  --symbol NIFTY50 \
+  --interval 1d \
+  --from 2026-08-01T00:00:00Z \
+  --to 2026-08-07T00:00:00Z
+```
+
+Supported intervals are `1m`, `5m`, `15m`, `30m`, `1h`, and `1d`. The command
+resolves the current Angel One token from `instrument_sources`, splits large
+provider windows, normalizes timestamps to UTC, preserves decimal values, and
+uses the existing idempotent `market_candles` upsert. See
+[`docs/phase-3.5-angel-one-historical.md`](../docs/phase-3.5-angel-one-historical.md).
+
 ## Phase 4.2 Binance ingestion command
 
 After PostgreSQL is running and migrations plus seed definitions have been applied,

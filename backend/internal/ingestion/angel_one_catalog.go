@@ -84,7 +84,9 @@ func InitialAngelOneInstrumentDefinitions() []AngelOneCanonicalInstrumentDefinit
 			AssetType:       "index",
 			Exchange:        "NSE",
 			Currency:        "INR",
-			ProviderSymbols: []string{"NIFTY", "NIFTY50", "NIFTY 50"},
+			// Prefer the current index-master spelling. Older master files may
+			// expose only NIFTY, so the remaining aliases stay as fallbacks.
+			ProviderSymbols: []string{"NIFTY 50", "NIFTY50", "NIFTY"},
 		},
 		{
 			CanonicalSymbol: "SBIN",
@@ -192,18 +194,11 @@ func ResolveAngelOneInstrumentMappings(
 		}
 		seenDefinitions[canonical] = struct{}{}
 
-		matches := make([]AngelOneInstrumentMasterRecord, 0, 1)
-		for _, record := range records {
-			if normalizeExchange(record.ExchangeSegment) != normalizeExchange(definition.Exchange) {
-				continue
-			}
-			if !containsProviderSymbol(definition.ProviderSymbols, record.TradingSymbol) {
-				continue
-			}
-			matches = append(matches, record)
+		match, _, err := selectPreferredAngelOneRecord(records, definition)
+		if err != nil {
+			return nil, fmt.Errorf("duplicate Angel One mappings for %s: %w", canonical, err)
 		}
-
-		if len(matches) == 0 {
+		if match == nil {
 			return nil, fmt.Errorf(
 				"Angel One mapping missing for %s: exchange=%s symbols=%v",
 				canonical,
@@ -211,17 +206,6 @@ func ResolveAngelOneInstrumentMappings(
 				definition.ProviderSymbols,
 			)
 		}
-		if len(matches) > 1 {
-			return nil, fmt.Errorf(
-				"duplicate Angel One mappings for %s: found %d rows for exchange=%s symbols=%v",
-				canonical,
-				len(matches),
-				definition.Exchange,
-				definition.ProviderSymbols,
-			)
-		}
-
-		match := matches[0]
 		metadata, err := json.Marshal(map[string]string{
 			"exchange_segment": strings.TrimSpace(match.ExchangeSegment),
 			"instrument_type":  strings.TrimSpace(match.InstrumentType),
@@ -246,6 +230,41 @@ func ResolveAngelOneInstrumentMappings(
 	}
 
 	return resolved, nil
+}
+
+// selectPreferredAngelOneRecord applies ProviderSymbols as an ordered list of
+// aliases instead of treating every alias as equally authoritative. This is
+// needed for NIFTY50 because current master files can contain both the exact
+// index spelling "Nifty 50" and a legacy NIFTY row. Duplicate rows for the
+// same preferred alias still fail rather than being guessed.
+func selectPreferredAngelOneRecord(
+	records []AngelOneInstrumentMasterRecord,
+	definition AngelOneCanonicalInstrumentDefinition,
+) (*AngelOneInstrumentMasterRecord, string, error) {
+	for _, preferredSymbol := range definition.ProviderSymbols {
+		matches := make([]AngelOneInstrumentMasterRecord, 0, 1)
+		for _, record := range records {
+			if normalizeExchange(record.ExchangeSegment) != normalizeExchange(definition.Exchange) {
+				continue
+			}
+			if !strings.EqualFold(strings.TrimSpace(preferredSymbol), strings.TrimSpace(record.TradingSymbol)) {
+				continue
+			}
+			matches = append(matches, record)
+		}
+		if len(matches) == 0 {
+			continue
+		}
+		if len(matches) > 1 {
+			return nil, preferredSymbol, fmt.Errorf(
+				"duplicate Angel One mappings: found %d rows for exchange=%s preferred_symbol=%s",
+				len(matches), definition.Exchange, preferredSymbol,
+			)
+		}
+		match := matches[0]
+		return &match, preferredSymbol, nil
+	}
+	return nil, "", nil
 }
 
 // PersistAngelOneCatalog creates missing canonical instruments and upserts the

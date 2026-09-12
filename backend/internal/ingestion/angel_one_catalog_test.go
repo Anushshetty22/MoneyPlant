@@ -37,6 +37,24 @@ func TestResolveAngelOneInstrumentMappingsResolvesInitialSix(t *testing.T) {
 	}
 }
 
+func TestResolveAngelOneInstrumentMappingsPrefersExactNiftyIndexAlias(t *testing.T) {
+	records := []ingestion.AngelOneInstrumentMasterRecord{
+		{Token: "legacy-nifty-token", TradingSymbol: "NIFTY", Name: "NIFTY", ExchangeSegment: "NSE"},
+		{Token: "nifty-index-token", TradingSymbol: "Nifty 50", Name: "NIFTY", InstrumentType: "AMXIDX", ExchangeSegment: "NSE"},
+	}
+
+	mappings, err := ingestion.ResolveAngelOneInstrumentMappings(
+		records,
+		ingestion.InitialAngelOneInstrumentDefinitions()[:1],
+	)
+	if err != nil {
+		t.Fatalf("resolve NIFTY50 mapping: %v", err)
+	}
+	if len(mappings) != 1 || mappings[0].ProviderInstrumentID != "nifty-index-token" || mappings[0].ProviderSymbol != "Nifty 50" {
+		t.Fatalf("NIFTY50 mapping = %#v, want preferred index row", mappings)
+	}
+}
+
 func TestAngelOneInstrumentMasterFixtureResolvesInitialSix(t *testing.T) {
 	fixture, err := os.Open("../../testdata/angel_one_instrument_master.json")
 	if err != nil {
