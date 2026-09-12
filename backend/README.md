@@ -49,6 +49,19 @@ provider windows, normalizes timestamps to UTC, preserves decimal values, and
 uses the existing idempotent `market_candles` upsert. See
 [`docs/phase-3.5-angel-one-historical.md`](../docs/phase-3.5-angel-one-historical.md).
 
+## Phase 3.6 Angel One live message decoder
+
+The provider-specific binary decoder is now available and tested offline:
+
+```bash
+go test -run '^TestDecodeAngelOne' ./internal/ingestion -v
+```
+
+It decodes SmartAPI Quote and Snap Quote packets into the common live-event
+contract while preserving exact prices and quantities. LTP packets are parsed
+but require Quote mode for normalization because LTP does not include quantity.
+The WebSocket connection and subscription workflow are the next phase.
+
 ## Phase 4.2 Binance ingestion command
 
 After PostgreSQL is running and migrations plus seed definitions have been applied,

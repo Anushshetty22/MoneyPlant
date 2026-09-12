@@ -4,9 +4,9 @@ MoneyPlant is a local-first financial data engineering and analytics project. It
 
 ## Current milestone
 
-Phase 1 and Phase 2 are complete. Phase 3.5 now imports Angel One historical
-candles through the credential-safe authentication, catalog, and normalized
-market-data foundations. The project is intentionally implemented
+Phase 1 and Phase 2 are complete. Phase 3.6 now decodes Angel One binary live
+market messages on top of the credential-safe authentication, catalog, and
+normalized market-data foundations. The project is intentionally implemented
 incrementally, with each sub-phase producing a testable result and a short
 learning checkpoint.
 
@@ -29,6 +29,8 @@ learning checkpoint.
   session tokens remain in memory and are never logged.
 - Phase 3.5 imports Angel One historical candles with bounded provider windows,
   UTC timestamps, exact decimals, and idempotent warehouse upserts.
+- Phase 3.6 decodes Angel One Quote and Snap Quote binary packets into the
+  provider-neutral live-event contract; WebSocket connection is next.
 
 See [`docs/project-guide.md`](docs/project-guide.md) for the consolidated
 setup, architecture, database, API, troubleshooting, and Phase 2 guide.

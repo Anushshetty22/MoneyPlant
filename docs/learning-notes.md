@@ -54,6 +54,8 @@ Use this file as a running project notebook. Keep entries short and practical.
 | 2026-09-11 | Keep Angel One JWT, refresh, and feed tokens private inside an in-memory session | Authentication credentials and provider tokens must never enter logs, fixtures, or warehouse records |
 | 2026-09-11 | Split Angel One historical requests by the provider's interval-specific day limits | The normalized ingestion request can stay provider-neutral while the adapter owns provider pagination and request formatting |
 | 2026-09-11 | Convert Angel One timestamps to UTC and parse OHLCV from raw JSON into PostgreSQL numerics | Provider-local timezone and JSON number representation should not leak precision or timezone ambiguity into the warehouse |
+| 2026-09-12 | Decode Angel One binary packets into a provider packet before creating a common live event | The provider-specific byte layout belongs at the adapter boundary, while monitoring should continue to consume the shared event contract |
+| 2026-09-12 | Use Quote mode for normalized Angel One trade events | LTP packets contain a price but no quantity, while the common MoneyPlant live-event contract requires both exact positive values |
 
 ## Problems and solutions
 
