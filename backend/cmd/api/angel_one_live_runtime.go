@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Anushshetty22/MoneyPlant/backend/internal/config"
@@ -21,7 +22,9 @@ func startOptionalAngelOneMonitor(
 	store *ingestion.LiveMarketSnapshotStore,
 	statusRegistry *ingestion.LiveMonitorStatusRegistry,
 	snapshotRepository *database.LiveMarketSnapshotRepository,
+	candleRepository *database.MarketCandleRepository,
 	sourceRepository *database.InstrumentSourceRepository,
+	monitorWaitGroup *sync.WaitGroup,
 ) {
 	if len(cfg.AngelOneLiveMonitorSymbols) == 0 {
 		return
@@ -43,16 +46,21 @@ func startOptionalAngelOneMonitor(
 	}
 
 	statusStores := make(map[string]*ingestion.LiveMonitorStatusStore, len(subscriptions))
+	sourceIDs := make(map[string]int64, len(subscriptions))
 	for _, subscription := range subscriptions {
-		statusStores[normalizeRuntimeSymbol(subscription.ProviderSymbol)] = statusRegistry.Register(ingestion.InstrumentReference{
+		providerSymbol := normalizeRuntimeSymbol(subscription.ProviderSymbol)
+		statusStores[providerSymbol] = statusRegistry.Register(ingestion.InstrumentReference{
 			CanonicalSymbol:      subscription.CanonicalSymbol,
 			Provider:             ingestion.ProviderAngelOne,
 			ProviderSymbol:       subscription.ProviderSymbol,
 			ProviderInstrumentID: subscription.ProviderInstrumentID,
 		})
+		sourceIDs[providerSymbol] = subscription.InstrumentSourceID
 	}
 
+	monitorWaitGroup.Add(1)
 	go func() {
+		defer monitorWaitGroup.Done()
 		authenticator, err := ingestion.NewAngelOneAuthenticatorWithSettings(
 			nil,
 			ingestion.AngelOneAuthSettings{
@@ -109,6 +117,20 @@ func startOptionalAngelOneMonitor(
 		persist := liveSnapshotPersistence(func(persistContext context.Context, event ingestion.LiveMarketEvent) error {
 			return persistLiveSnapshot(persistContext, snapshotRepository, event)
 		})
+		candleRuntime := liveCandleRuntime{
+			aggregator: ingestion.NewLiveMinuteCandleAggregator(),
+			sourceID: func(event ingestion.LiveMarketEvent) (int64, error) {
+				sourceID := sourceIDs[normalizeRuntimeSymbol(event.ProviderSymbol)]
+				if sourceID <= 0 {
+					return 0, fmt.Errorf("no source ID for Angel One symbol %s", event.ProviderSymbol)
+				}
+				return sourceID, nil
+			},
+			persist: func(persistContext context.Context, candle database.MarketCandleInput) error {
+				_, err := candleRepository.Upsert(persistContext, candle)
+				return err
+			},
+		}
 		result, _ := runLiveMonitor(
 			ctx,
 			monitor,
@@ -117,6 +139,7 @@ func startOptionalAngelOneMonitor(
 			persist,
 			cfg.LiveMonitorPersistenceInterval,
 			cfg.LiveMonitorFinalPersistenceTimeout,
+			candleRuntime,
 		)
 		log.Printf("Angel One live monitor summary: received=%d accepted=%d rejected=%d snapshots=%d", result.Received, result.Accepted, result.Rejected, store.Count())
 	}()
@@ -159,9 +182,32 @@ func resolveAngelOneLiveSubscriptions(
 			ProviderSymbol:       selected.ProviderSymbol,
 			ProviderInstrumentID: *selected.ProviderInstrumentID,
 			ExchangeType:         exchangeType,
+			InstrumentSourceID:   selected.ID,
 		})
 	}
 	return subscriptions, nil
+}
+
+func resolveLiveSourceID(
+	ctx context.Context,
+	repository *database.InstrumentSourceRepository,
+	provider ingestion.ProviderID,
+	canonicalSymbol string,
+	providerSymbol string,
+) (int64, error) {
+	if repository == nil {
+		return 0, fmt.Errorf("instrument source repository is not configured")
+	}
+	sources, err := repository.ListByCanonicalSymbol(ctx, canonicalSymbol)
+	if err != nil {
+		return 0, fmt.Errorf("list %s sources for %s: %w", provider, canonicalSymbol, err)
+	}
+	for _, source := range sources {
+		if source.Provider == string(provider) && source.IsActive && source.IsAuthoritative && strings.EqualFold(strings.TrimSpace(source.ProviderSymbol), strings.TrimSpace(providerSymbol)) {
+			return source.ID, nil
+		}
+	}
+	return 0, fmt.Errorf("no active authoritative %s source for %s", provider, canonicalSymbol)
 }
 
 func angelOneExchangeType(metadata []byte) (byte, error) {

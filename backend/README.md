@@ -101,6 +101,15 @@ state, event counters, reconnects, and persistence errors separately. A stream
 can be running while PostgreSQL persistence reports an error; this prevents a
 database problem from being confused with a healthy durable snapshot path.
 
+## Phase 3.9 live snapshots and one-minute candles
+
+Every accepted live event continues to update the latest in-memory and durable
+snapshot. The monitor also aggregates events by provider source and UTC minute
+into OHLCV candles. It upserts the same `(instrument_source_id, interval,
+observed_at)` row, so repeated events update one candle rather than creating raw
+tick rows or duplicate candles. Closed minutes flush as the next minute begins,
+and the active minute flushes during shutdown.
+
 ## Phase 4.2 Binance ingestion command
 
 After PostgreSQL is running and migrations plus seed definitions have been applied,

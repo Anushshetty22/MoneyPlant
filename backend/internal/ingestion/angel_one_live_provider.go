@@ -41,6 +41,7 @@ type AngelOneLiveSubscription struct {
 	ProviderSymbol       string
 	ProviderInstrumentID string
 	ExchangeType         byte
+	InstrumentSourceID   int64
 }
 
 func (s AngelOneLiveSubscription) validate() error {

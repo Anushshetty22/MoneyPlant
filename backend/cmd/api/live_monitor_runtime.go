@@ -24,6 +24,12 @@ import (
 // the production API uses persistLiveSnapshot below.
 type liveSnapshotPersistence func(context.Context, ingestion.LiveMarketEvent) error
 
+type liveCandleRuntime struct {
+	aggregator *ingestion.LiveMinuteCandleAggregator
+	sourceID   func(ingestion.LiveMarketEvent) (int64, error)
+	persist    func(context.Context, database.MarketCandleInput) error
+}
+
 // liveMonitorStatusSink keeps monitor execution independent from one or many
 // public status records. Binance uses one store per stream; Angel One uses one
 // multiplexed stream with one status store per subscribed provider symbol.
@@ -58,6 +64,7 @@ func runLiveMonitor(
 	persist liveSnapshotPersistence,
 	persistenceInterval time.Duration,
 	finalPersistenceTimeout time.Duration,
+	candleRuntimes ...liveCandleRuntime,
 ) (ingestion.LiveMarketRunResult, error) {
 	if monitor == nil {
 		return ingestion.LiveMarketRunResult{}, errors.New("live monitor cannot be nil")
@@ -73,6 +80,9 @@ func runLiveMonitor(
 	}
 	if finalPersistenceTimeout <= 0 {
 		return ingestion.LiveMarketRunResult{}, errors.New("live final persistence timeout must be positive")
+	}
+	if len(candleRuntimes) > 1 {
+		return ingestion.LiveMarketRunResult{}, errors.New("only one live candle runtime is supported")
 	}
 
 	statusStore.MarkRunning()
@@ -103,10 +113,16 @@ func runLiveMonitor(
 		}
 		statusStore.RecordAccepted(event)
 		persistLatest(eventContext, event)
+		if len(candleRuntimes) == 1 {
+			persistClosedLiveCandles(eventContext, candleRuntimes[0], event, statusStore)
+		}
 		return nil
 	}
 
 	result, runErr := monitor.Run(ctx, handleEvent)
+	if len(candleRuntimes) == 1 {
+		flushLiveCandles(candleRuntimes[0], statusStore, finalPersistenceTimeout)
+	}
 	if result.LastEvent != nil && persist != nil {
 		finalContext, cancelFinalPersistence := context.WithTimeout(context.Background(), finalPersistenceTimeout)
 		if err := persist(finalContext, *result.LastEvent); err != nil {
@@ -123,6 +139,56 @@ func runLiveMonitor(
 		log.Printf("live monitor stopped with error: %v", runErr)
 	}
 	return result, runErr
+}
+
+func persistClosedLiveCandles(
+	ctx context.Context,
+	runtime liveCandleRuntime,
+	event ingestion.LiveMarketEvent,
+	statusStore liveMonitorStatusSink,
+) {
+	if runtime.aggregator == nil || runtime.sourceID == nil || runtime.persist == nil {
+		return
+	}
+	sourceID, err := runtime.sourceID(event)
+	if err != nil {
+		statusStore.RecordPersistenceError(err)
+		log.Printf("resolve live candle source: %v", err)
+		return
+	}
+	if _, err := runtime.aggregator.Add(event, sourceID); err != nil {
+		statusStore.RecordPersistenceError(err)
+		log.Printf("aggregate live candle: %v", err)
+		return
+	}
+	for _, candle := range runtime.aggregator.FlushClosed(event.ObservedAt) {
+		if err := runtime.persist(ctx, candle); err != nil {
+			statusStore.RecordPersistenceError(err)
+			log.Printf("persist closed live candle: %v", err)
+			continue
+		}
+		runtime.aggregator.MarkPersisted(candle)
+	}
+}
+
+func flushLiveCandles(
+	runtime liveCandleRuntime,
+	statusStore liveMonitorStatusSink,
+	finalPersistenceTimeout time.Duration,
+) {
+	if runtime.aggregator == nil || runtime.persist == nil {
+		return
+	}
+	finalContext, cancel := context.WithTimeout(context.Background(), finalPersistenceTimeout)
+	defer cancel()
+	for _, candle := range runtime.aggregator.Flush() {
+		if err := runtime.persist(finalContext, candle); err != nil {
+			statusStore.RecordPersistenceError(err)
+			log.Printf("persist final live candle: %v", err)
+			continue
+		}
+		runtime.aggregator.MarkPersisted(candle)
+	}
 }
 
 // multiplexedLiveMonitorStatusSink fans lifecycle updates out to the six

@@ -94,6 +94,46 @@ func TestRunLiveMonitorSavesFinalEventOnCancellation(t *testing.T) {
 	}
 }
 
+func TestRunLiveMonitorFlushesCurrentMinuteCandleOnShutdown(t *testing.T) {
+	event := runtimeTestEvent(t, "100.00", "2.00")
+	stream := &runtimeScriptedStream{events: []ingestion.LiveMarketEvent{event}, blockAfterEOF: true}
+	monitor := runtimeMonitor(t, stream)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	statusStore := configuredRuntimeStatusStore()
+	var candles []database.MarketCandleInput
+	candleRuntime := liveCandleRuntime{
+		aggregator: ingestion.NewLiveMinuteCandleAggregator(),
+		sourceID:   func(ingestion.LiveMarketEvent) (int64, error) { return 42, nil },
+		persist: func(_ context.Context, candle database.MarketCandleInput) error {
+			candles = append(candles, candle)
+			return nil
+		},
+	}
+	result, runErr := runLiveMonitor(
+		ctx,
+		monitor,
+		ingestion.NewLiveMarketSnapshotStore(),
+		statusStore,
+		func(context.Context, ingestion.LiveMarketEvent) error {
+			cancel()
+			return nil
+		},
+		time.Hour,
+		time.Second,
+		candleRuntime,
+	)
+	if !errors.Is(runErr, context.Canceled) || result.Accepted != 1 {
+		t.Fatalf("result = %#v, error = %v", result, runErr)
+	}
+	if len(candles) != 1 {
+		t.Fatalf("flushed candles = %d, want one current-minute candle", len(candles))
+	}
+	if candles[0].InstrumentSourceID != 42 || candles[0].Interval != "1m" || candles[0].TradeCount.Int64 != 1 {
+		t.Fatalf("flushed candle = %#v", candles[0])
+	}
+}
+
 // TestRunLiveMonitorSeparatesPersistenceFailureFromStreamFailure verifies that
 // a database save problem is reported as persistence metadata while the live
 // stream can still finish normally. A provider failure follows in a separate

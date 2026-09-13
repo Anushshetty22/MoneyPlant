@@ -17,6 +17,7 @@ import (
 	// os and os/signal allow the process to wait for Ctrl+C or a termination signal.
 	"os"
 	"os/signal"
+	"sync"
 	// syscall provides SIGTERM, the standard graceful-termination signal used
 	// by Docker and most process managers.
 	"syscall"
@@ -119,7 +120,8 @@ func main() {
 	liveMonitorStatusRegistry.RecordRestored(restoredSnapshotCount)
 	liveMonitorContext, cancelLiveMonitor := context.WithCancel(context.Background())
 	defer cancelLiveMonitor()
-	startOptionalLiveMonitors(liveMonitorContext, cfg, liveSnapshotStore, liveMonitorStatusRegistry, liveMarketSnapshotRepository, instrumentSourceRepository)
+	var liveMonitorWaitGroup sync.WaitGroup
+	startOptionalLiveMonitors(liveMonitorContext, cfg, liveSnapshotStore, liveMonitorStatusRegistry, liveMarketSnapshotRepository, marketCandleRepository, instrumentSourceRepository, &liveMonitorWaitGroup)
 
 	// Phase 6.1 update: construct the HTTP server after configuration and database
 	// startup have succeeded. This ordering prevents the API from accepting
@@ -179,6 +181,25 @@ func main() {
 	if err := apiServer.Shutdown(shutdownContext); err != nil {
 		log.Printf("HTTP server shutdown error: %v", err)
 	}
+
+	// Wait for live monitors to finish their cancellation path before the
+	// deferred database-pool close. This gives each monitor time to flush its
+	// active one-minute candle and final durable snapshot during graceful exit.
+	monitorWaitContext, monitorWaitCancel := context.WithTimeout(
+		context.Background(),
+		cfg.LiveMonitorFinalPersistenceTimeout+5*time.Second,
+	)
+	monitorDone := make(chan struct{})
+	go func() {
+		liveMonitorWaitGroup.Wait()
+		close(monitorDone)
+	}()
+	select {
+	case <-monitorDone:
+	case <-monitorWaitContext.Done():
+		log.Printf("timed out waiting for live monitors to finish shutdown")
+	}
+	monitorWaitCancel()
 }
 
 // startOptionalLiveMonitors starts independent Binance monitors and one
@@ -191,7 +212,9 @@ func startOptionalLiveMonitors(
 	store *ingestion.LiveMarketSnapshotStore,
 	statusRegistry *ingestion.LiveMonitorStatusRegistry,
 	snapshotRepository *database.LiveMarketSnapshotRepository,
+	candleRepository *database.MarketCandleRepository,
 	sourceRepository *database.InstrumentSourceRepository,
+	monitorWaitGroup *sync.WaitGroup,
 ) {
 	if len(cfg.LiveMonitorSymbols) == 0 && len(cfg.AngelOneLiveMonitorSymbols) == 0 {
 		log.Printf("live monitor disabled; set LIVE_MONITOR_SYMBOL to enable it")
@@ -202,7 +225,14 @@ func startOptionalLiveMonitors(
 		reference := liveMonitorReference(symbol)
 		statusStore := statusRegistry.Register(reference)
 
+		monitorWaitGroup.Add(1)
 		go func() {
+			defer monitorWaitGroup.Done()
+			sourceID, sourceErr := resolveLiveSourceID(ctx, sourceRepository, reference.Provider, reference.CanonicalSymbol, reference.ProviderSymbol)
+			if sourceErr != nil {
+				statusStore.RecordPersistenceError(sourceErr)
+				log.Printf("live candle source resolution for %s: %v", reference.ProviderSymbol, sourceErr)
+			}
 			provider, err := ingestion.NewBinanceLiveMarketDataProvider(nil, cfg.LiveMonitorWebSocketURL)
 			if err != nil {
 				statusStore.MarkError(err)
@@ -238,6 +268,17 @@ func startOptionalLiveMonitors(
 			persist := liveSnapshotPersistence(func(persistContext context.Context, event ingestion.LiveMarketEvent) error {
 				return persistLiveSnapshot(persistContext, snapshotRepository, event)
 			})
+			var candleRuntime []liveCandleRuntime
+			if sourceErr == nil && sourceID > 0 && candleRepository != nil {
+				candleRuntime = []liveCandleRuntime{{
+					aggregator: ingestion.NewLiveMinuteCandleAggregator(),
+					sourceID:   func(ingestion.LiveMarketEvent) (int64, error) { return sourceID, nil },
+					persist: func(persistContext context.Context, candle database.MarketCandleInput) error {
+						_, err := candleRepository.Upsert(persistContext, candle)
+						return err
+					},
+				}}
+			}
 			result, _ := runLiveMonitor(
 				ctx,
 				monitor,
@@ -246,12 +287,13 @@ func startOptionalLiveMonitors(
 				persist,
 				cfg.LiveMonitorPersistenceInterval,
 				cfg.LiveMonitorFinalPersistenceTimeout,
+				candleRuntime...,
 			)
 			log.Printf("live monitor summary: provider=%s symbol=%s received=%d accepted=%d rejected=%d snapshots=%d", reference.Provider, reference.ProviderSymbol, result.Received, result.Accepted, result.Rejected, store.Count())
 		}()
 	}
 
-	startOptionalAngelOneMonitor(ctx, cfg, store, statusRegistry, snapshotRepository, sourceRepository)
+	startOptionalAngelOneMonitor(ctx, cfg, store, statusRegistry, snapshotRepository, candleRepository, sourceRepository, monitorWaitGroup)
 }
 
 func liveMonitorReference(symbol string) ingestion.InstrumentReference {
