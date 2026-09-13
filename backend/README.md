@@ -62,6 +62,20 @@ contract while preserving exact prices and quantities. LTP packets are parsed
 but require Quote mode for normalization because LTP does not include quantity.
 The WebSocket connection and subscription workflow are the next phase.
 
+## Phase 3.7 Angel One live connection
+
+The authenticated Angel One WebSocket provider now supports one multiplexed
+Quote-mode connection for multiple catalog tokens. It sends heartbeats, maps
+binary packets back to canonical instruments, refreshes the session after an
+authentication rejection, and can be wrapped by the existing reconnect policy.
+
+Focused offline verification:
+
+```bash
+go test -run '^TestAngelOneLiveProvider' ./internal/ingestion -v
+go test -race -run '^TestAngelOneLiveProvider' ./internal/ingestion
+```
+
 ## Phase 4.2 Binance ingestion command
 
 After PostgreSQL is running and migrations plus seed definitions have been applied,

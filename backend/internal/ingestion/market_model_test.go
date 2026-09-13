@@ -14,6 +14,7 @@ var (
 	_ HistoricalMarketDataProvider = (*FixtureMarketDataProvider)(nil)
 	_ LiveMarketDataProvider       = (*BinanceLiveMarketDataProvider)(nil)
 	_ LiveMarketDataProvider       = (*FixtureLiveMarketDataProvider)(nil)
+	_ LiveMarketDataProvider       = (*AngelOneLiveMarketDataProvider)(nil)
 )
 
 func TestInstrumentReferenceSeparatesCanonicalAndProviderIdentity(t *testing.T) {

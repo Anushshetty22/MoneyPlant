@@ -56,6 +56,8 @@ Use this file as a running project notebook. Keep entries short and practical.
 | 2026-09-11 | Convert Angel One timestamps to UTC and parse OHLCV from raw JSON into PostgreSQL numerics | Provider-local timezone and JSON number representation should not leak precision or timezone ambiguity into the warehouse |
 | 2026-09-12 | Decode Angel One binary packets into a provider packet before creating a common live event | The provider-specific byte layout belongs at the adapter boundary, while monitoring should continue to consume the shared event contract |
 | 2026-09-12 | Use Quote mode for normalized Angel One trade events | LTP packets contain a price but no quantity, while the common MoneyPlant live-event contract requires both exact positive values |
+| 2026-09-12 | Share one Angel One WebSocket across the instrument token set | SmartAPI supports multiplexed token subscriptions, and one socket avoids treating six instruments as six independent connection lifecycles |
+| 2026-09-12 | Put heartbeat, token-to-canonical mapping, and malformed-packet tolerance inside the Angel One stream adapter | The generic monitor should receive normalized events and transport failures without knowing provider protocol details |
 
 ## Problems and solutions
 
