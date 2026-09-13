@@ -38,10 +38,11 @@ type Config struct {
 	// behavior without opening a network stream. LiveMonitorSymbol remains for
 	// backward compatibility; LiveMonitorSymbols is the Phase 3 multi-symbol
 	// representation.
-	LiveMonitorSymbol       string
-	LiveMonitorSymbols      []string
-	LiveMonitorMaxRetries   int
-	LiveMonitorWebSocketURL string
+	LiveMonitorSymbol          string
+	LiveMonitorSymbols         []string
+	AngelOneLiveMonitorSymbols []string
+	LiveMonitorMaxRetries      int
+	LiveMonitorWebSocketURL    string
 	// LiveMonitorPersistenceInterval limits how often the open-ended stream
 	// writes the latest value to PostgreSQL.
 	LiveMonitorPersistenceInterval time.Duration
@@ -108,6 +109,10 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	angelOneSymbols, err := parseConfiguredSymbolList(os.Getenv("ANGEL_ONE_LIVE_MONITOR_SYMBOLS"), "ANGEL_ONE_LIVE_MONITOR_SYMBOLS")
+	if err != nil {
+		return Config{}, err
+	}
 	if len(configuredSymbols) > 0 {
 		configuredSymbol = configuredSymbols[0]
 	}
@@ -126,6 +131,7 @@ func Load() (Config, error) {
 		PostgresPassword:                   getString("POSTGRES_PASSWORD", "change-me-locally"),
 		LiveMonitorSymbol:                  configuredSymbol,
 		LiveMonitorSymbols:                 configuredSymbols,
+		AngelOneLiveMonitorSymbols:         angelOneSymbols,
 		LiveMonitorMaxRetries:              liveMonitorMaxRetries,
 		LiveMonitorWebSocketURL:            getString("LIVE_MONITOR_WS_URL", "wss://stream.binance.com:9443"),
 		LiveMonitorPersistenceInterval:     liveMonitorPersistenceInterval,
@@ -257,6 +263,14 @@ func parseLiveMonitorSymbols(pluralValue, singularValue string) ([]string, error
 		value = strings.TrimSpace(singularValue)
 		key = "LIVE_MONITOR_SYMBOL"
 	}
+	if value == "" {
+		return nil, nil
+	}
+	return parseConfiguredSymbolList(value, key)
+}
+
+func parseConfiguredSymbolList(value, key string) ([]string, error) {
+	value = strings.TrimSpace(value)
 	if value == "" {
 		return nil, nil
 	}

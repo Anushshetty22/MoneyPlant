@@ -45,7 +45,55 @@ func liveMonitorStatusHandler(
 		return
 	}
 
-	status := statusStore.Snapshot()
+	writeJSON(responseWriter, http.StatusOK, map[string]any{"data": liveMonitorStatusResponseFrom(statusStore.Snapshot())})
+}
+
+// liveMonitorStatusCompatibilityHandler keeps the original singular response
+// useful after multiple provider monitors are registered. It returns the first
+// deterministic registry entry, while clients needing every monitor use the
+// plural endpoint.
+func liveMonitorStatusCompatibilityHandler(
+	responseWriter http.ResponseWriter,
+	registry *ingestion.LiveMonitorStatusRegistry,
+	fallback *ingestion.LiveMonitorStatusStore,
+) {
+	if registry != nil {
+		statuses := registry.List()
+		if len(statuses) > 0 {
+			writeJSON(responseWriter, http.StatusOK, map[string]any{"data": liveMonitorStatusResponseFrom(statuses[0])})
+			return
+		}
+	}
+	liveMonitorStatusHandler(responseWriter, fallback)
+}
+
+// liveMonitorStatusesHandler exposes every registered provider/symbol status.
+// The fallback keeps the plural route useful for older callers that only wire
+// the original singular status store into NewServer.
+func liveMonitorStatusesHandler(
+	responseWriter http.ResponseWriter,
+	registry *ingestion.LiveMonitorStatusRegistry,
+	fallback *ingestion.LiveMonitorStatusStore,
+) {
+	if registry == nil && fallback == nil {
+		writeJSON(responseWriter, http.StatusInternalServerError, map[string]string{
+			"error": "live monitor status registry is not configured",
+		})
+		return
+	}
+	if registry != nil {
+		statuses := registry.List()
+		responses := make([]liveMonitorStatusResponse, 0, len(statuses))
+		for _, status := range statuses {
+			responses = append(responses, liveMonitorStatusResponseFrom(status))
+		}
+		writeJSON(responseWriter, http.StatusOK, map[string]any{"data": responses})
+		return
+	}
+	writeJSON(responseWriter, http.StatusOK, map[string]any{"data": []liveMonitorStatusResponse{liveMonitorStatusResponseFrom(fallback.Snapshot())}})
+}
+
+func liveMonitorStatusResponseFrom(status ingestion.LiveMonitorStatus) liveMonitorStatusResponse {
 	response := liveMonitorStatusResponse{
 		Enabled:         status.Enabled,
 		Provider:        status.Provider,
@@ -84,6 +132,5 @@ func liveMonitorStatusHandler(
 		lastPersistenceError := status.LastPersistenceError
 		response.LastPersistenceError = &lastPersistenceError
 	}
-
-	writeJSON(responseWriter, http.StatusOK, map[string]any{"data": response})
+	return response
 }

@@ -99,6 +99,9 @@ func main() {
 	// It uses the same shared pool and stores one current value per provider
 	// symbol rather than writing every raw trade as a historical tick.
 	liveMarketSnapshotRepository := database.NewLiveMarketSnapshotRepository(databasePool)
+	// Phase 3.8 update: create the provider-mapping repository used to resolve
+	// current Angel One symbols and tokens before opening its live stream.
+	instrumentSourceRepository := database.NewInstrumentSourceRepository(databasePool)
 
 	// Phase 2.6 update: create one in-memory snapshot store shared by the
 	// optional live monitors and the HTTP API. The store is harmless when live
@@ -113,9 +116,10 @@ func main() {
 	restoredSnapshotCount := restoreDurableLiveSnapshots(restoreContext, liveMarketSnapshotRepository, liveSnapshotStore)
 	cancelRestore()
 	liveMonitorStatusStore.RecordRestored(restoredSnapshotCount)
+	liveMonitorStatusRegistry.RecordRestored(restoredSnapshotCount)
 	liveMonitorContext, cancelLiveMonitor := context.WithCancel(context.Background())
 	defer cancelLiveMonitor()
-	startOptionalLiveMonitors(liveMonitorContext, cfg, liveSnapshotStore, liveMonitorStatusRegistry, liveMarketSnapshotRepository)
+	startOptionalLiveMonitors(liveMonitorContext, cfg, liveSnapshotStore, liveMonitorStatusRegistry, liveMarketSnapshotRepository, instrumentSourceRepository)
 
 	// Phase 6.1 update: construct the HTTP server after configuration and database
 	// startup have succeeded. This ordering prevents the API from accepting
@@ -130,6 +134,7 @@ func main() {
 		ingestionRunRepository,
 		liveSnapshotStore,
 		liveMonitorStatusStore,
+		liveMonitorStatusRegistry,
 	)
 
 	// Phase 6.1 update: run ListenAndServe in a goroutine so main can wait for
@@ -176,19 +181,20 @@ func main() {
 	}
 }
 
-// startOptionalLiveMonitors starts one independent monitor per configured
-// Binance symbol. A setup or stream failure is recorded on that symbol's
-// status store and does not cancel the other monitor goroutines.
+// startOptionalLiveMonitors starts independent Binance monitors and one
+// multiplexed Angel One monitor when their respective settings are enabled.
+// A setup or stream failure is recorded in its provider/symbol status store
+// and does not cancel other monitor goroutines.
 func startOptionalLiveMonitors(
 	ctx context.Context,
 	cfg config.Config,
 	store *ingestion.LiveMarketSnapshotStore,
 	statusRegistry *ingestion.LiveMonitorStatusRegistry,
 	snapshotRepository *database.LiveMarketSnapshotRepository,
+	sourceRepository *database.InstrumentSourceRepository,
 ) {
-	if len(cfg.LiveMonitorSymbols) == 0 {
+	if len(cfg.LiveMonitorSymbols) == 0 && len(cfg.AngelOneLiveMonitorSymbols) == 0 {
 		log.Printf("live monitor disabled; set LIVE_MONITOR_SYMBOL to enable it")
-		return
 	}
 
 	for _, symbol := range cfg.LiveMonitorSymbols {
@@ -244,6 +250,8 @@ func startOptionalLiveMonitors(
 			log.Printf("live monitor summary: provider=%s symbol=%s received=%d accepted=%d rejected=%d snapshots=%d", reference.Provider, reference.ProviderSymbol, result.Received, result.Accepted, result.Rejected, store.Count())
 		}()
 	}
+
+	startOptionalAngelOneMonitor(ctx, cfg, store, statusRegistry, snapshotRepository, sourceRepository)
 }
 
 func liveMonitorReference(symbol string) ingestion.InstrumentReference {

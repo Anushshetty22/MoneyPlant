@@ -11,6 +11,8 @@ import (
 	"log"
 	// time provides the persistence throttle and bounded final-save deadline.
 	"time"
+	// strings normalizes provider symbols used by the multi-provider status sink.
+	"strings"
 
 	"github.com/Anushshetty22/MoneyPlant/backend/internal/database"
 	"github.com/Anushshetty22/MoneyPlant/backend/internal/ingestion"
@@ -21,6 +23,17 @@ import (
 // code and PostgreSQL. Tests can provide a deterministic function here, while
 // the production API uses persistLiveSnapshot below.
 type liveSnapshotPersistence func(context.Context, ingestion.LiveMarketEvent) error
+
+// liveMonitorStatusSink keeps monitor execution independent from one or many
+// public status records. Binance uses one store per stream; Angel One uses one
+// multiplexed stream with one status store per subscribed provider symbol.
+type liveMonitorStatusSink interface {
+	MarkRunning()
+	RecordAccepted(ingestion.LiveMarketEvent)
+	RecordPersistenceSuccess()
+	RecordPersistenceError(error)
+	RecordResult(ingestion.LiveMarketRunResult, error)
+}
 
 // liveSnapshotRepository keeps the API orchestration independent from the
 // concrete PostgreSQL repository. The production repository satisfies this
@@ -41,7 +54,7 @@ func runLiveMonitor(
 	ctx context.Context,
 	monitor *ingestion.LiveMarketMonitor,
 	store *ingestion.LiveMarketSnapshotStore,
-	statusStore *ingestion.LiveMonitorStatusStore,
+	statusStore liveMonitorStatusSink,
 	persist liveSnapshotPersistence,
 	persistenceInterval time.Duration,
 	finalPersistenceTimeout time.Duration,
@@ -110,6 +123,52 @@ func runLiveMonitor(
 		log.Printf("live monitor stopped with error: %v", runErr)
 	}
 	return result, runErr
+}
+
+// multiplexedLiveMonitorStatusSink fans lifecycle updates out to the six
+// independent Angel One status records while routing event counters and
+// persistence results to the matching provider symbol.
+type multiplexedLiveMonitorStatusSink struct {
+	stores         map[string]*ingestion.LiveMonitorStatusStore
+	lastEventStore *ingestion.LiveMonitorStatusStore
+}
+
+func newMultiplexedLiveMonitorStatusSink(stores map[string]*ingestion.LiveMonitorStatusStore) *multiplexedLiveMonitorStatusSink {
+	return &multiplexedLiveMonitorStatusSink{stores: stores}
+}
+
+func (s *multiplexedLiveMonitorStatusSink) MarkRunning() {
+	for _, store := range s.stores {
+		store.MarkRunning()
+	}
+}
+
+func (s *multiplexedLiveMonitorStatusSink) RecordAccepted(event ingestion.LiveMarketEvent) {
+	store := s.stores[strings.ToUpper(strings.TrimSpace(event.ProviderSymbol))]
+	if store == nil {
+		return
+	}
+	s.lastEventStore = store
+	store.RecordAccepted(event)
+}
+
+func (s *multiplexedLiveMonitorStatusSink) RecordPersistenceSuccess() {
+	if s.lastEventStore != nil {
+		s.lastEventStore.RecordPersistenceSuccess()
+	}
+}
+
+func (s *multiplexedLiveMonitorStatusSink) RecordPersistenceError(err error) {
+	if s.lastEventStore != nil {
+		s.lastEventStore.RecordPersistenceError(err)
+	}
+}
+
+func (s *multiplexedLiveMonitorStatusSink) RecordResult(result ingestion.LiveMarketRunResult, runErr error) {
+	for providerSymbol, store := range s.stores {
+		perSymbol := result.ByProviderSymbol[strings.ToUpper(strings.TrimSpace(providerSymbol))]
+		store.RecordResult(perSymbol, runErr)
+	}
 }
 
 // restoreDurableLiveSnapshots seeds the fast in-memory store from PostgreSQL

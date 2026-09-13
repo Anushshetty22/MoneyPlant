@@ -76,6 +76,31 @@ go test -run '^TestAngelOneLiveProvider' ./internal/ingestion -v
 go test -race -run '^TestAngelOneLiveProvider' ./internal/ingestion
 ```
 
+## Phase 3.8 unified live monitor and status API
+
+The API can now run independent Binance monitors and one multiplexed Angel One
+monitor at the same time. Configure Binance symbols with
+`LIVE_MONITOR_SYMBOLS` and Angel One canonical symbols with
+`ANGEL_ONE_LIVE_MONITOR_SYMBOLS`. Angel One symbols must already have active
+provider mappings from the catalog refresh.
+
+The original singular status route remains compatible:
+
+```bash
+curl http://localhost:8080/api/v1/live/status
+```
+
+Use the plural route to inspect every provider and symbol independently:
+
+```bash
+curl http://localhost:8080/api/v1/live/statuses
+```
+
+Each response identifies the provider, canonical/provider symbol, lifecycle
+state, event counters, reconnects, and persistence errors separately. A stream
+can be running while PostgreSQL persistence reports an error; this prevents a
+database problem from being confused with a healthy durable snapshot path.
+
 ## Phase 4.2 Binance ingestion command
 
 After PostgreSQL is running and migrations plus seed definitions have been applied,
@@ -243,6 +268,9 @@ guessing from price freshness alone.
 
 The `reconnects` counter records retry attempts after a stream failure. A
 temporary reconnect does not immediately become a terminal monitor error.
+
+The plural provider-aware status route and Angel One monitor configuration are
+covered in the Phase 3.8 section below.
 
 ## Phase 2.11 reconnect metrics
 

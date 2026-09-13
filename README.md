@@ -4,8 +4,9 @@ MoneyPlant is a local-first financial data engineering and analytics project. It
 
 ## Current milestone
 
-Phase 1 and Phase 2 are complete. Phase 3.7 now connects to Angel One’s
-authenticated multiplexed WebSocket on top of the binary decoder, catalog, and
+Phase 1 and Phase 2 are complete. Phase 3.8 now runs provider-aware live
+monitors and exposes independent status for Binance and Angel One on top of the
+authenticated multiplexed WebSocket, binary decoder, catalog, and
 normalized market-data foundations. The project is intentionally implemented
 incrementally, with each sub-phase producing a testable result and a short
 learning checkpoint.
@@ -34,6 +35,9 @@ learning checkpoint.
 - Phase 3.7 opens one authenticated multiplexed Angel One connection, handles
   heartbeats, refreshes sessions after handshake rejection, and reconnects
   through the shared bounded retry policy.
+- Phase 3.8 runs Binance and Angel One monitors independently and exposes
+  `GET /api/v1/live/statuses` with provider, symbol, lifecycle, counters, and
+  separate persistence warnings.
 
 See [`docs/project-guide.md`](docs/project-guide.md) for the consolidated
 setup, architecture, database, API, troubleshooting, and Phase 2 guide.

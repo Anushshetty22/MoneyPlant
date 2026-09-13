@@ -52,6 +52,9 @@ func TestFixtureLiveStreamDeliversNormalizedEvents(t *testing.T) {
 	if result.LastEvent == nil || !result.LastEvent.Price.Valid {
 		t.Fatal("monitor did not retain the last valid event")
 	}
+	if result.ByProviderSymbol["BTCUSDT"].Accepted != 2 || result.ByProviderSymbol["SBIN.NS"].Accepted != 0 {
+		t.Fatalf("per-provider-symbol result = %#v", result.ByProviderSymbol)
+	}
 	encodedPrice, err := json.Marshal(result.LastEvent.Price)
 	if err != nil {
 		t.Fatalf("marshal last price: %v", err)
@@ -93,6 +96,10 @@ func TestLiveMarketMonitorRejectsOneBadEventAndContinues(t *testing.T) {
 	}
 	if handled != 2 {
 		t.Fatalf("handled events = %d, want 2", handled)
+	}
+	perSymbol := result.ByProviderSymbol["BTCUSDT"]
+	if perSymbol.Received != 3 || perSymbol.Accepted != 2 || perSymbol.Rejected != 1 {
+		t.Fatalf("per-symbol result = %#v, want received=3 accepted=2 rejected=1", perSymbol)
 	}
 }
 

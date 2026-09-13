@@ -42,6 +42,7 @@ func NewServer(
 	ingestionRunRepository *database.IngestionRunRepository,
 	liveSnapshotStore *ingestion.LiveMarketSnapshotStore,
 	liveMonitorStatusStore *ingestion.LiveMonitorStatusStore,
+	liveMonitorStatusRegistries ...*ingestion.LiveMonitorStatusRegistry,
 ) *http.Server {
 	// ServeMux maps an incoming HTTP method and path to a handler function.
 	// The health route is the first endpoint because it gives us a small,
@@ -52,6 +53,10 @@ func NewServer(
 	// Phase 6.2 update: register the first database-backed read endpoint. The
 	// closure keeps the repository dependency attached to this route without
 	// using package-level mutable state, which makes future handler tests safer.
+	var liveMonitorStatusRegistry *ingestion.LiveMonitorStatusRegistry
+	if len(liveMonitorStatusRegistries) > 0 {
+		liveMonitorStatusRegistry = liveMonitorStatusRegistries[0]
+	}
 	mux.HandleFunc("GET /api/v1/instruments", func(responseWriter http.ResponseWriter, request *http.Request) {
 		listInstrumentsHandler(responseWriter, request, instrumentRepository)
 	})
@@ -89,7 +94,13 @@ func NewServer(
 	// latest market value so an operator can distinguish stale data from a
 	// stopped or failed monitor.
 	mux.HandleFunc("GET /api/v1/live/status", func(responseWriter http.ResponseWriter, request *http.Request) {
-		liveMonitorStatusHandler(responseWriter, liveMonitorStatusStore)
+		liveMonitorStatusCompatibilityHandler(responseWriter, liveMonitorStatusRegistry, liveMonitorStatusStore)
+	})
+
+	// Phase 3.8 update: expose one status record per configured provider and
+	// symbol while preserving the original singular compatibility route.
+	mux.HandleFunc("GET /api/v1/live/statuses", func(responseWriter http.ResponseWriter, request *http.Request) {
+		liveMonitorStatusesHandler(responseWriter, liveMonitorStatusRegistry, liveMonitorStatusStore)
 	})
 
 	// The middleware surrounds every registered route. This means future routes

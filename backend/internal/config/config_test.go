@@ -119,6 +119,7 @@ func TestLoadParsesMultipleLiveMonitorSymbols(t *testing.T) {
 	setRequiredDefaults(t)
 	t.Setenv("LIVE_MONITOR_SYMBOLS", "btcusdt, ETHUSDT")
 	t.Setenv("LIVE_MONITOR_SYMBOL", "SBIN")
+	t.Setenv("ANGEL_ONE_LIVE_MONITOR_SYMBOLS", "NIFTY50, SBIN")
 
 	loaded, err := Load()
 	if err != nil {
@@ -130,6 +131,9 @@ func TestLoadParsesMultipleLiveMonitorSymbols(t *testing.T) {
 	want := []string{"BTCUSDT", "ETHUSDT"}
 	if !slicesEqual(loaded.LiveMonitorSymbols, want) {
 		t.Fatalf("symbols = %#v, want %#v", loaded.LiveMonitorSymbols, want)
+	}
+	if !slicesEqual(loaded.AngelOneLiveMonitorSymbols, []string{"NIFTY50", "SBIN"}) {
+		t.Fatalf("Angel One symbols = %#v", loaded.AngelOneLiveMonitorSymbols)
 	}
 }
 
@@ -199,6 +203,7 @@ func setRequiredDefaults(t *testing.T) {
 		"LIVE_MONITOR_MAX_RETRIES",
 		"LIVE_MONITOR_SYMBOL",
 		"LIVE_MONITOR_SYMBOLS",
+		"ANGEL_ONE_LIVE_MONITOR_SYMBOLS",
 		"LIVE_MONITOR_WS_URL",
 		"LIVE_MONITOR_PERSIST_INTERVAL",
 		"LIVE_MONITOR_FINAL_PERSIST_TIMEOUT",

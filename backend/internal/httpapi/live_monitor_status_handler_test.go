@@ -92,3 +92,44 @@ func TestLiveMonitorStatusEndpointReturnsOperationalState(t *testing.T) {
 		t.Fatalf("last_error = %q, want null", *envelope.Data.LastError)
 	}
 }
+
+func TestLiveMonitorStatusesEndpointReturnsIndependentProviderStates(t *testing.T) {
+	registry := ingestion.NewLiveMonitorStatusRegistry()
+	binanceStore := registry.Register(ingestion.InstrumentReference{
+		CanonicalSymbol: "BTCUSDT", Provider: ingestion.ProviderBinance, ProviderSymbol: "BTCUSDT",
+	})
+	angelStore := registry.Register(ingestion.InstrumentReference{
+		CanonicalSymbol: "NIFTY50", Provider: ingestion.ProviderAngelOne, ProviderSymbol: "Nifty 50",
+	})
+	binanceStore.MarkRunning()
+	angelStore.MarkError(errors.New("Angel One credentials unavailable"))
+
+	server := httpapi.NewServer("127.0.0.1", 0, nil, nil, nil, nil, nil, ingestion.NewLiveMarketSnapshotStore(), binanceStore, registry)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/live/statuses", nil)
+	responseRecorder := httptest.NewRecorder()
+	server.Handler.ServeHTTP(responseRecorder, request)
+
+	if responseRecorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", responseRecorder.Code, http.StatusOK)
+	}
+	var envelope struct {
+		Data []struct {
+			Provider       string `json:"provider"`
+			Canonical      string `json:"canonical_symbol"`
+			ProviderSymbol string `json:"provider_symbol"`
+			State          string `json:"state"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(responseRecorder.Body).Decode(&envelope); err != nil {
+		t.Fatalf("decode statuses response: %v", err)
+	}
+	if len(envelope.Data) != 2 {
+		t.Fatalf("status count = %d, want 2", len(envelope.Data))
+	}
+	if envelope.Data[0].Provider != "angel_one" || envelope.Data[0].Canonical != "NIFTY50" || envelope.Data[0].ProviderSymbol != "Nifty 50" || envelope.Data[0].State != ingestion.LiveMonitorStateError {
+		t.Fatalf("first status = %#v", envelope.Data[0])
+	}
+	if envelope.Data[1].Provider != "binance" || envelope.Data[1].Canonical != "BTCUSDT" || envelope.Data[1].State != ingestion.LiveMonitorStateRunning {
+		t.Fatalf("second status = %#v", envelope.Data[1])
+	}
+}

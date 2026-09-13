@@ -304,6 +304,20 @@ func (r *LiveMonitorStatusRegistry) List() []LiveMonitorStatus {
 	return result
 }
 
+// RecordRestored applies the startup restoration count to every registered
+// monitor, keeping plural status responses consistent after an API restart.
+func (r *LiveMonitorStatusRegistry) RecordRestored(count int) {
+	r.mu.RLock()
+	stores := make([]*LiveMonitorStatusStore, 0, len(r.stores))
+	for _, store := range r.stores {
+		stores = append(stores, store)
+	}
+	r.mu.RUnlock()
+	for _, store := range stores {
+		store.RecordRestored(count)
+	}
+}
+
 func normalizeLiveMonitorStatusKey(provider ProviderID, providerSymbol string) LiveMonitorStatusKey {
 	return LiveMonitorStatusKey{
 		Provider:       strings.ToLower(strings.TrimSpace(string(provider))),

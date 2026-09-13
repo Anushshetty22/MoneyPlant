@@ -82,10 +82,11 @@ type LiveMarketEventHandler func(context.Context, LiveMarketEvent) error
 // Accepted counts events passed to the callback, while Rejected counts events
 // dropped by validation. LastEvent is useful for a future monitoring endpoint.
 type LiveMarketRunResult struct {
-	Received  int64
-	Accepted  int64
-	Rejected  int64
-	LastEvent *LiveMarketEvent
+	Received         int64
+	Accepted         int64
+	Rejected         int64
+	LastEvent        *LiveMarketEvent
+	ByProviderSymbol map[string]LiveMarketRunResult
 }
 
 // LiveMarketMonitor validates and consumes a live stream.
@@ -114,6 +115,7 @@ func NewLiveMarketMonitor(stream LiveMarketStream) (*LiveMarketMonitor, error) {
 // blind to all subsequent valid messages. Transport and callback errors remain
 // fatal because the caller needs to decide whether to reconnect or stop.
 func (m *LiveMarketMonitor) Run(ctx context.Context, handler LiveMarketEventHandler) (result LiveMarketRunResult, runErr error) {
+	result.ByProviderSymbol = make(map[string]LiveMarketRunResult)
 	// The monitor owns the stream after construction. Closing it here keeps the
 	// lifecycle safe for both finite fixtures and future network connections.
 	defer func() {
@@ -133,8 +135,19 @@ func (m *LiveMarketMonitor) Run(ctx context.Context, handler LiveMarketEventHand
 		}
 
 		result.Received++
+		providerSymbol := strings.ToUpper(strings.TrimSpace(event.ProviderSymbol))
+		if providerSymbol != "" {
+			perSymbol := result.ByProviderSymbol[providerSymbol]
+			perSymbol.Received++
+			result.ByProviderSymbol[providerSymbol] = perSymbol
+		}
 		if err := ValidateLiveMarketEvent(event); err != nil {
 			result.Rejected++
+			if providerSymbol != "" {
+				perSymbol := result.ByProviderSymbol[providerSymbol]
+				perSymbol.Rejected++
+				result.ByProviderSymbol[providerSymbol] = perSymbol
+			}
 			// Continue reading so one bad message does not stop the monitor.
 			continue
 		}
@@ -146,6 +159,13 @@ func (m *LiveMarketMonitor) Run(ctx context.Context, handler LiveMarketEventHand
 		}
 
 		result.Accepted++
+		if providerSymbol != "" {
+			perSymbol := result.ByProviderSymbol[providerSymbol]
+			perSymbol.Accepted++
+			lastSymbolEvent := event
+			perSymbol.LastEvent = &lastSymbolEvent
+			result.ByProviderSymbol[providerSymbol] = perSymbol
+		}
 		// Copy the loop value before taking its address. This makes LastEvent
 		// point to a stable value after the next Receive call overwrites event.
 		lastEvent := event
