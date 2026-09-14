@@ -24,6 +24,7 @@ func startOptionalAngelOneMonitor(
 	snapshotRepository *database.LiveMarketSnapshotRepository,
 	candleRepository *database.MarketCandleRepository,
 	sourceRepository *database.InstrumentSourceRepository,
+	liveStreamHub liveUpdatePublisher,
 	monitorWaitGroup *sync.WaitGroup,
 ) {
 	if len(cfg.AngelOneLiveMonitorSymbols) == 0 {
@@ -96,6 +97,9 @@ func startOptionalAngelOneMonitor(
 		policy.OnRetry = func(reconnectErr error, _ time.Duration) {
 			for _, statusStore := range statusStores {
 				statusStore.RecordReconnect(reconnectErr)
+				if liveStreamHub != nil {
+					liveStreamHub.PublishStatus(statusStore.Snapshot())
+				}
 			}
 		}
 		stream, err := ingestion.NewReconnectingLiveMarketStream(
@@ -119,6 +123,14 @@ func startOptionalAngelOneMonitor(
 		})
 		candleRuntime := liveCandleRuntime{
 			aggregator: ingestion.NewLiveMinuteCandleAggregator(),
+			updates:    liveStreamHub,
+			statusFor: func(event ingestion.LiveMarketEvent) ingestion.LiveMonitorStatus {
+				statusStore := statusStores[normalizeRuntimeSymbol(event.ProviderSymbol)]
+				if statusStore == nil {
+					return ingestion.LiveMonitorStatus{}
+				}
+				return statusStore.Snapshot()
+			},
 			sourceID: func(event ingestion.LiveMarketEvent) (int64, error) {
 				sourceID := sourceIDs[normalizeRuntimeSymbol(event.ProviderSymbol)]
 				if sourceID <= 0 {

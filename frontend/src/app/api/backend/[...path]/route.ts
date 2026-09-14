@@ -19,12 +19,8 @@ export async function GET(request: Request, { params }: RouteContext) {
   const upstreamResponse = await fetch(upstreamURL, {
     cache: "no-store"
   });
-  const body = await upstreamResponse.text();
-
-  return new Response(body, {
+  return new Response(upstreamResponse.body, {
     status: upstreamResponse.status,
-    headers: {
-      "Content-Type": upstreamResponse.headers.get("Content-Type") ?? "application/json"
-    }
+    headers: upstreamResponse.headers
   });
 }

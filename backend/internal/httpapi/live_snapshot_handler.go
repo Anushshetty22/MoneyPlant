@@ -4,11 +4,8 @@ import (
 	// net/http provides request and response types plus HTTP status constants.
 	"net/http"
 	// strings normalizes an optional symbol filter.
-	"strings"
-	// time formats live event timestamps as UTC ISO-8601 strings.
-	"time"
-
 	"github.com/Anushshetty22/MoneyPlant/backend/internal/ingestion"
+	"strings"
 )
 
 // liveSnapshotResponse is the stable JSON representation exposed by the live
@@ -47,16 +44,7 @@ func listLiveSnapshotsHandler(
 
 	items := make([]liveSnapshotResponse, 0, len(events))
 	for _, event := range events {
-		items = append(items, liveSnapshotResponse{
-			CanonicalSymbol:  event.CanonicalSymbol,
-			Provider:         string(event.Provider),
-			ProviderSymbol:   event.ProviderSymbol,
-			EventType:        event.EventType,
-			ObservedAt:       event.ObservedAt.UTC().Format(time.RFC3339Nano),
-			Price:            requiredNumeric(event.Price),
-			Quantity:         requiredNumeric(event.Quantity),
-			SourceReceivedAt: event.SourceReceivedAt.UTC().Format(time.RFC3339Nano),
-		})
+		items = append(items, liveSnapshotResponseFromEvent(event))
 	}
 
 	writeJSON(responseWriter, http.StatusOK, map[string]any{"data": items})

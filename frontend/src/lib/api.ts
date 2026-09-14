@@ -252,6 +252,16 @@ export async function listLiveSnapshots(
   return payload.data[0] ?? null;
 }
 
+// liveStreamURL builds the same-origin SSE URL used by the dashboard. Keeping
+// the proxy path here prevents components from knowing API routing details.
+export function liveStreamURL(symbol: string, provider?: string): string {
+  const query = new URLSearchParams({ symbol });
+  if (provider) {
+    query.set("provider", provider);
+  }
+  return `${browserAPIBaseURL}/api/v1/live/stream?${query.toString()}`;
+}
+
 // getLiveMonitorStatus loads operational metadata for the selected backend
 // monitor. It is separate from listLiveSnapshots because a monitor can be
 // running before its first event arrives, or stopped after its last snapshot.

@@ -4,8 +4,9 @@ MoneyPlant is a local-first financial data engineering and analytics project. It
 
 ## Current milestone
 
-Phase 1 and Phase 2 are complete. Phase 3.10 now exposes provider-aware
-instrument mappings and canonical snapshot lookup on top of Phase 3.9's
+Phase 1 and Phase 2 are complete. Phase 3.11 now streams provider-aware live
+updates to the dashboard on top of Phase 3.10's instrument mappings and
+canonical snapshot lookup and Phase 3.9's
 provider-aware live
 monitors and exposes independent status for Binance and Angel One on top of the
 authenticated multiplexed WebSocket, binary decoder, catalog, normalized
@@ -45,6 +46,8 @@ learning checkpoint.
   recent out-of-order corrections.
 - Phase 3.10 returns provider mappings with instruments and lets callers filter
   live snapshots by canonical symbol and provider.
+- Phase 3.11 provides snapshot, status, and heartbeat SSE events with polling
+  fallback for dashboard recovery.
 
 See [`docs/project-guide.md`](docs/project-guide.md) for the consolidated
 setup, architecture, database, API, troubleshooting, and Phase 2 guide.

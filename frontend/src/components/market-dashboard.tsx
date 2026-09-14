@@ -5,6 +5,7 @@ import {
   getLiveMonitorStatus,
   listCandles,
   listLiveSnapshots,
+  liveStreamURL,
   type Candle,
   type Instrument,
   type LiveMonitorStatus,
@@ -362,9 +363,9 @@ export default function MarketDashboard({ instruments }: { instruments: Instrume
     const controller = new AbortController();
     const liveProvider = selectedInstrument ? providerForInstrument(selectedInstrument) : undefined;
 
-    // Fetch once immediately and then poll. The API currently exposes a
-    // snapshot endpoint rather than a browser WebSocket, so polling keeps this
-    // first dashboard integration simple while the backend stream stays live.
+    // Fetch once immediately for fast initial rendering. The SSE connection
+    // then pushes snapshots and status changes without waiting for the polling
+    // interval; polling remains a recovery fallback if the stream disconnects.
     const loadLiveSnapshot = () => {
       setIsLiveLoading(true);
       setLiveError(null);
@@ -394,11 +395,32 @@ export default function MarketDashboard({ instruments }: { instruments: Instrume
 
     loadLiveSnapshot();
     const refreshTimer = window.setInterval(loadLiveSnapshot, 5000);
+    const liveStream = new EventSource(liveStreamURL(selectedSymbol, liveProvider ?? undefined));
+    liveStream.addEventListener("snapshot", (event) => {
+      if (!isCurrentRequest) {
+        return;
+      }
+      setLiveSnapshot(JSON.parse((event as MessageEvent).data) as LiveSnapshot);
+      setLiveError(null);
+    });
+    liveStream.addEventListener("status", (event) => {
+      if (!isCurrentRequest) {
+        return;
+      }
+      setLiveStatus(JSON.parse((event as MessageEvent).data) as LiveMonitorStatus);
+      setLiveError(null);
+    });
+    liveStream.onerror = () => {
+      if (isCurrentRequest) {
+        setLiveError("Live stream disconnected; polling fallback is active");
+      }
+    };
 
     return () => {
       isCurrentRequest = false;
       controller.abort();
       window.clearInterval(refreshTimer);
+      liveStream.close();
     };
   }, [selectedInstrument, selectedSymbol]);
 

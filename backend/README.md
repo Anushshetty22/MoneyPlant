@@ -119,6 +119,13 @@ authoritative flag. `GET /api/v1/live/snapshots` accepts optional canonical
 `TCS` to provider symbols such as `TCS-EQ`; clients do not need to encode that
 mapping themselves.
 
+## Phase 3.11 live dashboard stream
+
+`GET /api/v1/live/stream?symbol=TCS&provider=angel_one` provides a Server-Sent
+Events connection with `snapshot`, `status`, and periodic `heartbeat` events.
+Each browser subscriber is isolated, and disconnecting one client does not
+affect the provider monitor or other subscribers.
+
 ## Phase 4.2 Binance ingestion command
 
 After PostgreSQL is running and migrations plus seed definitions have been applied,

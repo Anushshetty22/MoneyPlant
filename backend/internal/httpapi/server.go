@@ -55,6 +55,7 @@ func NewServer(
 		liveSnapshotStore,
 		liveMonitorStatusStore,
 		nil,
+		nil,
 		liveMonitorStatusRegistries...,
 	)
 }
@@ -86,6 +87,39 @@ func NewServerWithInstrumentSources(
 		liveSnapshotStore,
 		liveMonitorStatusStore,
 		instrumentSourceRepository,
+		nil,
+		liveMonitorStatusRegistries...,
+	)
+}
+
+// NewServerWithInstrumentSourcesAndLiveStream wires the provider catalog and
+// live SSE hub into the production API while keeping older constructors stable.
+func NewServerWithInstrumentSourcesAndLiveStream(
+	host string,
+	port int,
+	instrumentRepository *database.InstrumentRepository,
+	marketCandleRepository *database.MarketCandleRepository,
+	macroDatasetRepository *database.MacroDatasetRepository,
+	macroObservationRepository *database.MacroObservationRepository,
+	ingestionRunRepository *database.IngestionRunRepository,
+	liveSnapshotStore *ingestion.LiveMarketSnapshotStore,
+	liveMonitorStatusStore *ingestion.LiveMonitorStatusStore,
+	instrumentSourceRepository *database.InstrumentSourceRepository,
+	liveStreamHub *LiveStreamHub,
+	liveMonitorStatusRegistries ...*ingestion.LiveMonitorStatusRegistry,
+) *http.Server {
+	return newServer(
+		host,
+		port,
+		instrumentRepository,
+		marketCandleRepository,
+		macroDatasetRepository,
+		macroObservationRepository,
+		ingestionRunRepository,
+		liveSnapshotStore,
+		liveMonitorStatusStore,
+		instrumentSourceRepository,
+		liveStreamHub,
 		liveMonitorStatusRegistries...,
 	)
 }
@@ -101,6 +135,7 @@ func newServer(
 	liveSnapshotStore *ingestion.LiveMarketSnapshotStore,
 	liveMonitorStatusStore *ingestion.LiveMonitorStatusStore,
 	instrumentSourceRepository *database.InstrumentSourceRepository,
+	liveStreamHub *LiveStreamHub,
 	liveMonitorStatusRegistries ...*ingestion.LiveMonitorStatusRegistry,
 ) *http.Server {
 	// ServeMux maps an incoming HTTP method and path to a handler function.
@@ -147,6 +182,9 @@ func newServer(
 	// has not been enabled through LIVE_MONITOR_SYMBOL.
 	mux.HandleFunc("GET /api/v1/live/snapshots", func(responseWriter http.ResponseWriter, request *http.Request) {
 		listLiveSnapshotsHandler(responseWriter, request, liveSnapshotStore)
+	})
+	mux.HandleFunc("GET /api/v1/live/stream", func(responseWriter http.ResponseWriter, request *http.Request) {
+		liveStreamHandler(responseWriter, request, liveStreamHub, liveSnapshotStore, liveMonitorStatusRegistry, liveMonitorStatusStore)
 	})
 
 	// Phase 2.9 update: expose lifecycle state and counters separately from the
@@ -376,4 +414,16 @@ func (recorder *responseStatusRecorder) Write(body []byte) (int, error) {
 		recorder.WriteHeader(http.StatusOK)
 	}
 	return recorder.ResponseWriter.Write(body)
+}
+
+// Flush preserves streaming behavior for Server-Sent Events through the
+// request-logging middleware. Without forwarding http.Flusher, the wrapper
+// would make a streaming handler appear unsupported to the client.
+func (recorder *responseStatusRecorder) Flush() {
+	if !recorder.headerSent {
+		recorder.WriteHeader(http.StatusOK)
+	}
+	if flusher, ok := recorder.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
 }

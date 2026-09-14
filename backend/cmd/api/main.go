@@ -121,12 +121,13 @@ func main() {
 	liveMonitorContext, cancelLiveMonitor := context.WithCancel(context.Background())
 	defer cancelLiveMonitor()
 	var liveMonitorWaitGroup sync.WaitGroup
-	startOptionalLiveMonitors(liveMonitorContext, cfg, liveSnapshotStore, liveMonitorStatusRegistry, liveMarketSnapshotRepository, marketCandleRepository, instrumentSourceRepository, &liveMonitorWaitGroup)
+	liveStreamHub := httpapi.NewLiveStreamHub()
+	startOptionalLiveMonitors(liveMonitorContext, cfg, liveSnapshotStore, liveMonitorStatusRegistry, liveMarketSnapshotRepository, marketCandleRepository, instrumentSourceRepository, liveStreamHub, &liveMonitorWaitGroup)
 
 	// Phase 6.1 update: construct the HTTP server after configuration and database
 	// startup have succeeded. This ordering prevents the API from accepting
 	// requests while a required backend dependency is unavailable.
-	apiServer := httpapi.NewServerWithInstrumentSources(
+	apiServer := httpapi.NewServerWithInstrumentSourcesAndLiveStream(
 		cfg.APIHost,
 		cfg.APIPort,
 		instrumentRepository,
@@ -137,6 +138,7 @@ func main() {
 		liveSnapshotStore,
 		liveMonitorStatusStore,
 		instrumentSourceRepository,
+		liveStreamHub,
 		liveMonitorStatusRegistry,
 	)
 
@@ -215,6 +217,7 @@ func startOptionalLiveMonitors(
 	snapshotRepository *database.LiveMarketSnapshotRepository,
 	candleRepository *database.MarketCandleRepository,
 	sourceRepository *database.InstrumentSourceRepository,
+	liveStreamHub liveUpdatePublisher,
 	monitorWaitGroup *sync.WaitGroup,
 ) {
 	if len(cfg.LiveMonitorSymbols) == 0 && len(cfg.AngelOneLiveMonitorSymbols) == 0 {
@@ -245,6 +248,9 @@ func startOptionalLiveMonitors(
 			policy.MaxRetries = cfg.LiveMonitorMaxRetries
 			policy.OnRetry = func(reconnectErr error, _ time.Duration) {
 				statusStore.RecordReconnect(reconnectErr)
+				if liveStreamHub != nil {
+					liveStreamHub.PublishStatus(statusStore.Snapshot())
+				}
 			}
 			stream, err := ingestion.NewReconnectingLiveMarketStream(
 				provider,
@@ -270,15 +276,22 @@ func startOptionalLiveMonitors(
 				return persistLiveSnapshot(persistContext, snapshotRepository, event)
 			})
 			var candleRuntime []liveCandleRuntime
+			runtime := liveCandleRuntime{
+				updates: liveStreamHub,
+				statusFor: func(ingestion.LiveMarketEvent) ingestion.LiveMonitorStatus {
+					return statusStore.Snapshot()
+				},
+			}
 			if sourceErr == nil && sourceID > 0 && candleRepository != nil {
-				candleRuntime = []liveCandleRuntime{{
-					aggregator: ingestion.NewLiveMinuteCandleAggregator(),
-					sourceID:   func(ingestion.LiveMarketEvent) (int64, error) { return sourceID, nil },
-					persist: func(persistContext context.Context, candle database.MarketCandleInput) error {
-						_, err := candleRepository.Upsert(persistContext, candle)
-						return err
-					},
-				}}
+				runtime.aggregator = ingestion.NewLiveMinuteCandleAggregator()
+				runtime.sourceID = func(ingestion.LiveMarketEvent) (int64, error) { return sourceID, nil }
+				runtime.persist = func(persistContext context.Context, candle database.MarketCandleInput) error {
+					_, err := candleRepository.Upsert(persistContext, candle)
+					return err
+				}
+			}
+			if runtime.updates != nil || runtime.aggregator != nil {
+				candleRuntime = []liveCandleRuntime{runtime}
 			}
 			result, _ := runLiveMonitor(
 				ctx,
@@ -294,7 +307,7 @@ func startOptionalLiveMonitors(
 		}()
 	}
 
-	startOptionalAngelOneMonitor(ctx, cfg, store, statusRegistry, snapshotRepository, candleRepository, sourceRepository, monitorWaitGroup)
+	startOptionalAngelOneMonitor(ctx, cfg, store, statusRegistry, snapshotRepository, candleRepository, sourceRepository, liveStreamHub, monitorWaitGroup)
 }
 
 func liveMonitorReference(symbol string) ingestion.InstrumentReference {

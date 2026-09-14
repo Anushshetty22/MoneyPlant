@@ -28,6 +28,13 @@ type liveCandleRuntime struct {
 	aggregator *ingestion.LiveMinuteCandleAggregator
 	sourceID   func(ingestion.LiveMarketEvent) (int64, error)
 	persist    func(context.Context, database.MarketCandleInput) error
+	updates    liveUpdatePublisher
+	statusFor  func(ingestion.LiveMarketEvent) ingestion.LiveMonitorStatus
+}
+
+type liveUpdatePublisher interface {
+	PublishSnapshot(ingestion.LiveMarketEvent)
+	PublishStatus(ingestion.LiveMonitorStatus)
 }
 
 // liveMonitorStatusSink keeps monitor execution independent from one or many
@@ -112,6 +119,15 @@ func runLiveMonitor(
 			return err
 		}
 		statusStore.RecordAccepted(event)
+		for _, runtime := range candleRuntimes {
+			if runtime.updates == nil {
+				continue
+			}
+			runtime.updates.PublishSnapshot(event)
+			if runtime.statusFor != nil {
+				runtime.updates.PublishStatus(runtime.statusFor(event))
+			}
+		}
 		persistLatest(eventContext, event)
 		if len(candleRuntimes) == 1 {
 			persistClosedLiveCandles(eventContext, candleRuntimes[0], event, statusStore)
