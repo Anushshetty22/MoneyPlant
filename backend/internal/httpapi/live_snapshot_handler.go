@@ -25,8 +25,9 @@ type liveSnapshotResponse struct {
 	SourceReceivedAt string `json:"source_received_at"`
 }
 
-// listLiveSnapshotsHandler serves the latest in-memory event for every symbol,
-// or one symbol when ?symbol=BTCUSDT is provided.
+// listLiveSnapshotsHandler serves latest in-memory events. Both symbol and
+// provider are optional filters, and symbol always means the canonical
+// MoneyPlant symbol rather than the provider's private symbol.
 func listLiveSnapshotsHandler(
 	responseWriter http.ResponseWriter,
 	request *http.Request,
@@ -42,23 +43,7 @@ func listLiveSnapshotsHandler(
 	symbol := strings.ToUpper(strings.TrimSpace(request.URL.Query().Get("symbol")))
 	provider := strings.ToLower(strings.TrimSpace(request.URL.Query().Get("provider")))
 	var events []ingestion.LiveMarketEvent
-	if symbol == "" {
-		events = store.List()
-	} else if provider != "" {
-		event, exists := store.GetByProvider(provider, symbol)
-		if !exists {
-			events = []ingestion.LiveMarketEvent{}
-		} else {
-			events = []ingestion.LiveMarketEvent{event}
-		}
-	} else {
-		event, exists := store.Get(symbol)
-		if !exists {
-			events = []ingestion.LiveMarketEvent{}
-		} else {
-			events = []ingestion.LiveMarketEvent{event}
-		}
-	}
+	events = store.ListFiltered(provider, symbol)
 
 	items := make([]liveSnapshotResponse, 0, len(events))
 	for _, event := range events {

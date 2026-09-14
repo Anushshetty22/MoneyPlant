@@ -89,6 +89,33 @@ func (s *LiveMarketSnapshotStore) GetByProvider(provider, providerSymbol string)
 	return cloneLiveMarketEvent(event), true
 }
 
+// ListFiltered returns latest snapshots matching the optional canonical symbol
+// and provider filters. Canonical symbols are the public MoneyPlant identity;
+// callers do not need to know provider-specific symbols such as Nifty 50.
+func (s *LiveMarketSnapshotStore) ListFiltered(provider, canonicalSymbol string) []LiveMarketEvent {
+	normalizedProvider := strings.ToLower(strings.TrimSpace(provider))
+	normalizedCanonicalSymbol := strings.ToUpper(strings.TrimSpace(canonicalSymbol))
+	s.mu.RLock()
+	result := make([]LiveMarketEvent, 0, len(s.snapshots))
+	for _, event := range s.snapshots {
+		if normalizedProvider != "" && strings.ToLower(strings.TrimSpace(string(event.Provider))) != normalizedProvider {
+			continue
+		}
+		if normalizedCanonicalSymbol != "" && strings.ToUpper(strings.TrimSpace(event.CanonicalSymbol)) != normalizedCanonicalSymbol {
+			continue
+		}
+		result = append(result, cloneLiveMarketEvent(event))
+	}
+	s.mu.RUnlock()
+	sort.Slice(result, func(left, right int) bool {
+		if result[left].Provider == result[right].Provider {
+			return normalizeSnapshotSymbol(result[left].ProviderSymbol) < normalizeSnapshotSymbol(result[right].ProviderSymbol)
+		}
+		return result[left].Provider < result[right].Provider
+	})
+	return result
+}
+
 // List returns one latest event per provider/symbol pair in deterministic
 // provider-then-symbol order.
 func (s *LiveMarketSnapshotStore) List() []LiveMarketEvent {

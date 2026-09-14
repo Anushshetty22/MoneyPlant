@@ -11,11 +11,15 @@ import {
   type LiveSnapshot
 } from "@/lib/api";
 
-// The Phase 1 source decision currently maps crypto to Binance and equities to
-// Yahoo Finance. This small resolver keeps that initial rule visible; a future
-// instrument-source API can replace it when more providers are added.
-function providerForInstrument(instrument: Instrument): string {
-  return instrument.asset_type === "crypto" ? "binance" : "yahoo";
+// The backend returns the authoritative mapping for each canonical instrument.
+// The dashboard uses it directly, so provider-specific symbols stay out of the
+// React code and can change through catalog refreshes.
+function sourceForInstrument(instrument: Instrument) {
+  return instrument.sources.find((source) => source.is_active && source.is_authoritative) ?? null;
+}
+
+function providerForInstrument(instrument: Instrument): string | null {
+  return sourceForInstrument(instrument)?.provider ?? null;
 }
 
 // formatRetrievedAt turns the machine timestamp from the API into a readable
@@ -312,12 +316,20 @@ export default function MarketDashboard({ instruments }: { instruments: Instrume
     setIsLoading(true);
     setError(null);
 
+    const provider = providerForInstrument(selectedInstrument);
+    if (!provider) {
+      setCandles([]);
+      setError("No authoritative provider source is configured for this instrument");
+      setIsLoading(false);
+      return;
+    }
+
     // Fetching inside the effect means the chart refreshes when the user changes
     // the instrument or date window. Abort prevents an older request from
     // updating the chart after a newer selection has already been made.
     listCandles(
       selectedInstrument.canonical_symbol,
-      providerForInstrument(selectedInstrument),
+      provider,
       "1d",
       from,
       to,
@@ -348,6 +360,7 @@ export default function MarketDashboard({ instruments }: { instruments: Instrume
 
     let isCurrentRequest = true;
     const controller = new AbortController();
+    const liveProvider = selectedInstrument ? providerForInstrument(selectedInstrument) : undefined;
 
     // Fetch once immediately and then poll. The API currently exposes a
     // snapshot endpoint rather than a browser WebSocket, so polling keeps this
@@ -357,7 +370,7 @@ export default function MarketDashboard({ instruments }: { instruments: Instrume
       setLiveError(null);
 
       Promise.all([
-        listLiveSnapshots(selectedSymbol, controller.signal),
+        listLiveSnapshots(selectedSymbol, liveProvider ?? undefined, controller.signal),
         getLiveMonitorStatus(controller.signal)
       ])
         .then(([snapshot, status]) => {
@@ -427,7 +440,7 @@ export default function MarketDashboard({ instruments }: { instruments: Instrume
 
         {selectedInstrument && (
           <div className="mt-5 flex flex-col gap-2 border-t border-slate-100 pt-4 text-xs text-slate-500 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5">
-            <span>Source: <strong className="font-medium text-slate-700">{providerForInstrument(selectedInstrument)}</strong></span>
+            <span>Source: <strong className="font-medium text-slate-700">{providerForInstrument(selectedInstrument) ?? "unconfigured"}</strong></span>
             <span>Interval: <strong className="font-medium text-slate-700">1d</strong></span>
             <span>Times are UTC</span>
             {candles.length > 0 && (

@@ -12,6 +12,18 @@ export type Instrument = {
   exchange: string | null;
   currency: string;
   is_active: boolean;
+  sources: InstrumentSource[];
+};
+
+// InstrumentSource describes how one canonical MoneyPlant symbol is
+// represented by a provider. The frontend uses the authoritative active source
+// returned by the API instead of hardcoding provider-specific symbols or tokens.
+export type InstrumentSource = {
+  provider: string;
+  provider_symbol: string;
+  provider_instrument_id: string | null;
+  is_authoritative: boolean;
+  is_active: boolean;
 };
 
 // Candle is the frontend representation of one market OHLCV observation.
@@ -220,9 +232,13 @@ export async function listMacroObservations(
 // this client helper keeps the dashboard focused on the selected instrument.
 export async function listLiveSnapshots(
   symbol: string,
+  provider?: string,
   signal?: AbortSignal
 ): Promise<LiveSnapshot | null> {
   const query = new URLSearchParams({ symbol });
+  if (provider) {
+    query.set("provider", provider);
+  }
   const response = await fetch(`${browserAPIBaseURL}/api/v1/live/snapshots?${query.toString()}`, {
     cache: "no-store",
     signal

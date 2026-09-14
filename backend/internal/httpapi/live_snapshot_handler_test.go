@@ -28,6 +28,8 @@ func TestLiveSnapshotEndpointReturnsLatestEvents(t *testing.T) {
 	observedAt := time.Date(2026, time.September, 8, 12, 30, 0, 0, time.UTC)
 
 	if err := store.Handle(context.Background(), ingestion.LiveMarketEvent{
+		CanonicalSymbol:  "BTCUSDT",
+		Provider:         ingestion.ProviderBinance,
 		ProviderSymbol:   "BTCUSDT",
 		EventType:        "trade",
 		ObservedAt:       observedAt,
@@ -83,6 +85,35 @@ func TestLiveSnapshotEndpointReturnsLatestEvents(t *testing.T) {
 			t.Fatalf("data = %#v, want an empty JSON array", response.Data)
 		}
 	})
+}
+
+func TestLiveSnapshotEndpointResolvesCanonicalSymbolAndProvider(t *testing.T) {
+	store := ingestion.NewLiveMarketSnapshotStore()
+	eventTime := time.Date(2026, time.September, 8, 12, 30, 0, 0, time.UTC)
+	if err := store.Handle(context.Background(), ingestion.LiveMarketEvent{
+		CanonicalSymbol:  "TCS",
+		Provider:         ingestion.ProviderAngelOne,
+		ProviderSymbol:   "TCS-EQ",
+		EventType:        "trade",
+		ObservedAt:       eventTime,
+		Price:            testNumeric(t, "3500.00"),
+		Quantity:         testNumeric(t, "2"),
+		SourceReceivedAt: eventTime.Add(time.Millisecond),
+	}); err != nil {
+		t.Fatalf("store Angel One event: %v", err)
+	}
+
+	server := httpapi.NewServer("127.0.0.1", 0, nil, nil, nil, nil, nil, store, ingestion.NewLiveMonitorStatusStore())
+	testServer := httptest.NewServer(server.Handler)
+	defer testServer.Close()
+
+	response := getSnapshotResponse(t, testServer.URL+"/api/v1/live/snapshots?symbol=tcs&provider=ANGEL_ONE")
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", response.StatusCode, http.StatusOK, response.Body)
+	}
+	if len(response.Data) != 1 || response.Data[0].ProviderSymbol != "TCS-EQ" {
+		t.Fatalf("filtered data = %#v, want TCS-EQ snapshot", response.Data)
+	}
 }
 
 // TestLiveSnapshotEndpointReturnsEmptyArrayWhenDisabled documents the normal

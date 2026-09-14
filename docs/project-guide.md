@@ -403,6 +403,9 @@ persistence warnings remain separate so one failure does not hide the other.
 Phase 3.9 now extends the shared market-data model into provider-aware live
 monitoring for Binance and an authenticated Angel One multiplexed connection,
 with one-minute OHLCV rollups persisted through the existing candle upsert.
+Phase 3.10 adds provider-source metadata to instrument responses and canonical
+symbol/provider filtering for live snapshots, so frontend code does not need to
+know provider-specific symbols or tokens.
 Phase 3.1 froze the canonical/provider identity, provider capability,
 lifecycle status, and common error contracts; these are documented in
 [`docs/phase-3-data-model.md`](phase-3-data-model.md). The
@@ -437,4 +440,5 @@ idempotency behavior, and testing workflow remain stable.
 - `docs/phase-3.7-angel-one-live-connection.md` — authenticated multiplexed live connection
 - `docs/phase-3.8-unified-live-monitor.md` — provider-aware monitor lifecycle and status API
 - `docs/phase-3.9-live-candles.md` — latest snapshots and one-minute candle rollups
+- `docs/phase-3.10-unified-instrument-snapshots.md` — canonical instrument and live snapshot APIs
 - `docs/document-style-guide.md` — shared document formatting rules

@@ -110,6 +110,15 @@ observed_at)` row, so repeated events update one candle rather than creating raw
 tick rows or duplicate candles. Closed minutes flush as the next minute begins,
 and the active minute flushes during shutdown.
 
+## Phase 3.10 unified instrument and snapshot APIs
+
+`GET /api/v1/instruments` includes each instrument's provider sources, including
+provider symbol, optional provider instrument ID, active state, and the
+authoritative flag. `GET /api/v1/live/snapshots` accepts optional canonical
+`symbol` and `provider` filters. The API resolves canonical symbols such as
+`TCS` to provider symbols such as `TCS-EQ`; clients do not need to encode that
+mapping themselves.
+
 ## Phase 4.2 Binance ingestion command
 
 After PostgreSQL is running and migrations plus seed definitions have been applied,

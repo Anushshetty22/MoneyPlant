@@ -44,6 +44,65 @@ func NewServer(
 	liveMonitorStatusStore *ingestion.LiveMonitorStatusStore,
 	liveMonitorStatusRegistries ...*ingestion.LiveMonitorStatusRegistry,
 ) *http.Server {
+	return newServer(
+		host,
+		port,
+		instrumentRepository,
+		marketCandleRepository,
+		macroDatasetRepository,
+		macroObservationRepository,
+		ingestionRunRepository,
+		liveSnapshotStore,
+		liveMonitorStatusStore,
+		nil,
+		liveMonitorStatusRegistries...,
+	)
+}
+
+// NewServerWithInstrumentSources creates the API with provider mappings wired
+// into the instrument response. NewServer remains available for older callers
+// and tests that do not need catalog metadata.
+func NewServerWithInstrumentSources(
+	host string,
+	port int,
+	instrumentRepository *database.InstrumentRepository,
+	marketCandleRepository *database.MarketCandleRepository,
+	macroDatasetRepository *database.MacroDatasetRepository,
+	macroObservationRepository *database.MacroObservationRepository,
+	ingestionRunRepository *database.IngestionRunRepository,
+	liveSnapshotStore *ingestion.LiveMarketSnapshotStore,
+	liveMonitorStatusStore *ingestion.LiveMonitorStatusStore,
+	instrumentSourceRepository *database.InstrumentSourceRepository,
+	liveMonitorStatusRegistries ...*ingestion.LiveMonitorStatusRegistry,
+) *http.Server {
+	return newServer(
+		host,
+		port,
+		instrumentRepository,
+		marketCandleRepository,
+		macroDatasetRepository,
+		macroObservationRepository,
+		ingestionRunRepository,
+		liveSnapshotStore,
+		liveMonitorStatusStore,
+		instrumentSourceRepository,
+		liveMonitorStatusRegistries...,
+	)
+}
+
+func newServer(
+	host string,
+	port int,
+	instrumentRepository *database.InstrumentRepository,
+	marketCandleRepository *database.MarketCandleRepository,
+	macroDatasetRepository *database.MacroDatasetRepository,
+	macroObservationRepository *database.MacroObservationRepository,
+	ingestionRunRepository *database.IngestionRunRepository,
+	liveSnapshotStore *ingestion.LiveMarketSnapshotStore,
+	liveMonitorStatusStore *ingestion.LiveMonitorStatusStore,
+	instrumentSourceRepository *database.InstrumentSourceRepository,
+	liveMonitorStatusRegistries ...*ingestion.LiveMonitorStatusRegistry,
+) *http.Server {
 	// ServeMux maps an incoming HTTP method and path to a handler function.
 	// The health route is the first endpoint because it gives us a small,
 	// dependency-free way to confirm that the API process is reachable.
@@ -58,7 +117,7 @@ func NewServer(
 		liveMonitorStatusRegistry = liveMonitorStatusRegistries[0]
 	}
 	mux.HandleFunc("GET /api/v1/instruments", func(responseWriter http.ResponseWriter, request *http.Request) {
-		listInstrumentsHandler(responseWriter, request, instrumentRepository)
+		listInstrumentsHandler(responseWriter, request, instrumentRepository, instrumentSourceRepository)
 	})
 
 	// Phase 6.2 update: register the market-data route. Query parameters are
@@ -144,13 +203,22 @@ func healthHandler(responseWriter http.ResponseWriter, request *http.Request) {
 // The database model contains internal metadata and Go field names, so this
 // response type explicitly controls which stable fields API clients receive.
 type instrumentResponse struct {
-	ID              int64   `json:"id"`
-	CanonicalSymbol string  `json:"canonical_symbol"`
-	Name            string  `json:"name"`
-	AssetType       string  `json:"asset_type"`
-	Exchange        *string `json:"exchange"`
-	Currency        string  `json:"currency"`
-	IsActive        bool    `json:"is_active"`
+	ID              int64                      `json:"id"`
+	CanonicalSymbol string                     `json:"canonical_symbol"`
+	Name            string                     `json:"name"`
+	AssetType       string                     `json:"asset_type"`
+	Exchange        *string                    `json:"exchange"`
+	Currency        string                     `json:"currency"`
+	IsActive        bool                       `json:"is_active"`
+	Sources         []instrumentSourceResponse `json:"sources"`
+}
+
+type instrumentSourceResponse struct {
+	Provider             string  `json:"provider"`
+	ProviderSymbol       string  `json:"provider_symbol"`
+	ProviderInstrumentID *string `json:"provider_instrument_id"`
+	IsAuthoritative      bool    `json:"is_authoritative"`
+	IsActive             bool    `json:"is_active"`
 }
 
 // listInstrumentsHandler serves the active instrument catalog.
@@ -164,6 +232,7 @@ func listInstrumentsHandler(
 	responseWriter http.ResponseWriter,
 	request *http.Request,
 	instrumentRepository *database.InstrumentRepository,
+	instrumentSourceRepository *database.InstrumentSourceRepository,
 ) {
 	// A nil dependency is a server configuration problem, not a client error.
 	// Keeping this check makes the handler safer in tests and prevents a nil
@@ -194,6 +263,26 @@ func listInstrumentsHandler(
 	// unexpectedly changing the frontend response format.
 	items := make([]instrumentResponse, 0, len(instruments))
 	for _, instrument := range instruments {
+		sources := make([]instrumentSourceResponse, 0)
+		if instrumentSourceRepository != nil {
+			instrumentSources, sourceErr := instrumentSourceRepository.ListByCanonicalSymbol(request.Context(), instrument.CanonicalSymbol)
+			if sourceErr != nil {
+				log.Printf("list sources for %s: %v", instrument.CanonicalSymbol, sourceErr)
+				writeJSON(responseWriter, http.StatusInternalServerError, map[string]string{
+					"error": "unable to load instrument sources",
+				})
+				return
+			}
+			for _, source := range instrumentSources {
+				sources = append(sources, instrumentSourceResponse{
+					Provider:             source.Provider,
+					ProviderSymbol:       source.ProviderSymbol,
+					ProviderInstrumentID: source.ProviderInstrumentID,
+					IsAuthoritative:      source.IsAuthoritative,
+					IsActive:             source.IsActive,
+				})
+			}
+		}
 		items = append(items, instrumentResponse{
 			ID:              instrument.ID,
 			CanonicalSymbol: instrument.CanonicalSymbol,
@@ -202,6 +291,7 @@ func listInstrumentsHandler(
 			Exchange:        instrument.Exchange,
 			Currency:        instrument.Currency,
 			IsActive:        instrument.IsActive,
+			Sources:         sources,
 		})
 	}
 

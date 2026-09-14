@@ -126,7 +126,7 @@ func main() {
 	// Phase 6.1 update: construct the HTTP server after configuration and database
 	// startup have succeeded. This ordering prevents the API from accepting
 	// requests while a required backend dependency is unavailable.
-	apiServer := httpapi.NewServer(
+	apiServer := httpapi.NewServerWithInstrumentSources(
 		cfg.APIHost,
 		cfg.APIPort,
 		instrumentRepository,
@@ -136,6 +136,7 @@ func main() {
 		ingestionRunRepository,
 		liveSnapshotStore,
 		liveMonitorStatusStore,
+		instrumentSourceRepository,
 		liveMonitorStatusRegistry,
 	)
 

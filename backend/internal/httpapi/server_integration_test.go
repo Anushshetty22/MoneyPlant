@@ -57,7 +57,7 @@ func TestReadOnlyAPIIntegration(t *testing.T) {
 	// Build every repository exactly as main.go does. The HTTP server receives
 	// these dependencies through its constructor, so the test covers dependency
 	// wiring as well as handler behavior.
-	server := httpapi.NewServer(
+	server := httpapi.NewServerWithInstrumentSources(
 		"127.0.0.1",
 		0,
 		database.NewInstrumentRepository(pool),
@@ -67,6 +67,7 @@ func TestReadOnlyAPIIntegration(t *testing.T) {
 		database.NewIngestionRunRepository(pool),
 		ingestion.NewLiveMarketSnapshotStore(),
 		ingestion.NewLiveMonitorStatusStore(),
+		database.NewInstrumentSourceRepository(pool),
 	)
 
 	// httptest.NewServer uses an ephemeral local port and serves the exact Handler
