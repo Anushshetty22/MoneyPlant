@@ -277,6 +277,51 @@ func (r *MarketCandleRepository) ListByCanonicalSymbol(
 	return candles, nil
 }
 
+// ListBeforeCanonicalSymbol returns the most recent candles before a UTC
+// boundary, in chronological order. Analytics uses this bounded lookback to
+// warm up rolling windows without changing the existing candle endpoint.
+func (r *MarketCandleRepository) ListBeforeCanonicalSymbol(
+	ctx context.Context,
+	canonicalSymbol string,
+	provider string,
+	interval string,
+	before pgtype.Timestamptz,
+	limit int32,
+) ([]MarketCandle, error) {
+	rows, err := r.queries.ListMarketCandlesBeforeCanonicalSymbol(ctx, generated.ListMarketCandlesBeforeCanonicalSymbolParams{
+		CanonicalSymbol: canonicalSymbol,
+		Provider:        provider,
+		Interval:        interval,
+		ObservedAt:      before,
+		Limit:           limit,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list candle lookback for %s via %s: %w", canonicalSymbol, provider, err)
+	}
+
+	candles := make([]MarketCandle, 0, len(rows))
+	for _, row := range rows {
+		candles = append(candles, marketCandleFromGenerated(
+			row.ID,
+			row.InstrumentSourceID,
+			row.Interval,
+			row.ObservedAt,
+			row.SourceCloseAt,
+			row.Open,
+			row.High,
+			row.Low,
+			row.Close,
+			row.Volume,
+			row.QuoteVolume,
+			row.TradeCount,
+			row.TakerBuyVolume,
+			row.TakerBuyQuoteVolume,
+			row.SourceRetrievedAt,
+		))
+	}
+	return candles, nil
+}
+
 // marketCandleFromGenerated centralizes conversion from a generated sqlc row
 // to the application model and keeps Create and List consistent.
 func marketCandleFromGenerated(

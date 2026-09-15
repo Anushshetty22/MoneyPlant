@@ -245,6 +245,126 @@ func (q *Queries) InsertMarketCandleIfAbsent(ctx context.Context, arg InsertMark
 	return i, err
 }
 
+const listMarketCandlesBeforeCanonicalSymbol = `-- name: ListMarketCandlesBeforeCanonicalSymbol :many
+SELECT
+    market_candles.id,
+    market_candles.instrument_source_id,
+    market_candles.interval,
+    market_candles.observed_at,
+    market_candles.source_close_at,
+    market_candles.open,
+    market_candles.high,
+    market_candles.low,
+    market_candles.close,
+    market_candles.volume,
+    market_candles.quote_volume,
+    market_candles.trade_count,
+    market_candles.taker_buy_volume,
+    market_candles.taker_buy_quote_volume,
+    market_candles.source_retrieved_at
+FROM (
+    SELECT
+        market_candles.id,
+        market_candles.instrument_source_id,
+        market_candles.interval,
+        market_candles.observed_at,
+        market_candles.source_close_at,
+        market_candles.open,
+        market_candles.high,
+        market_candles.low,
+        market_candles.close,
+        market_candles.volume,
+        market_candles.quote_volume,
+        market_candles.trade_count,
+        market_candles.taker_buy_volume,
+        market_candles.taker_buy_quote_volume,
+        market_candles.source_retrieved_at
+    FROM market_candles
+    JOIN instrument_sources
+        ON instrument_sources.id = market_candles.instrument_source_id
+    JOIN instruments
+        ON instruments.id = instrument_sources.instrument_id
+    WHERE instruments.canonical_symbol = $1
+      AND instrument_sources.provider = $2
+      AND market_candles.interval = $3
+      AND market_candles.observed_at < $4
+    ORDER BY market_candles.observed_at DESC
+    LIMIT $5
+) AS market_candles
+ORDER BY market_candles.observed_at
+`
+
+type ListMarketCandlesBeforeCanonicalSymbolParams struct {
+	CanonicalSymbol string             `json:"canonical_symbol"`
+	Provider        string             `json:"provider"`
+	Interval        string             `json:"interval"`
+	ObservedAt      pgtype.Timestamptz `json:"observed_at"`
+	Limit           int32              `json:"limit"`
+}
+
+type ListMarketCandlesBeforeCanonicalSymbolRow struct {
+	ID                  int64              `json:"id"`
+	InstrumentSourceID  int64              `json:"instrument_source_id"`
+	Interval            string             `json:"interval"`
+	ObservedAt          pgtype.Timestamptz `json:"observed_at"`
+	SourceCloseAt       pgtype.Timestamptz `json:"source_close_at"`
+	Open                pgtype.Numeric     `json:"open"`
+	High                pgtype.Numeric     `json:"high"`
+	Low                 pgtype.Numeric     `json:"low"`
+	Close               pgtype.Numeric     `json:"close"`
+	Volume              pgtype.Numeric     `json:"volume"`
+	QuoteVolume         pgtype.Numeric     `json:"quote_volume"`
+	TradeCount          pgtype.Int8        `json:"trade_count"`
+	TakerBuyVolume      pgtype.Numeric     `json:"taker_buy_volume"`
+	TakerBuyQuoteVolume pgtype.Numeric     `json:"taker_buy_quote_volume"`
+	SourceRetrievedAt   pgtype.Timestamptz `json:"source_retrieved_at"`
+}
+
+// Returns the most recent candles before a requested range. Analytics uses this
+// bounded lookback to warm up moving averages and volatility without loading
+// the entire history into memory.
+func (q *Queries) ListMarketCandlesBeforeCanonicalSymbol(ctx context.Context, arg ListMarketCandlesBeforeCanonicalSymbolParams) ([]ListMarketCandlesBeforeCanonicalSymbolRow, error) {
+	rows, err := q.db.Query(ctx, listMarketCandlesBeforeCanonicalSymbol,
+		arg.CanonicalSymbol,
+		arg.Provider,
+		arg.Interval,
+		arg.ObservedAt,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMarketCandlesBeforeCanonicalSymbolRow
+	for rows.Next() {
+		var i ListMarketCandlesBeforeCanonicalSymbolRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.InstrumentSourceID,
+			&i.Interval,
+			&i.ObservedAt,
+			&i.SourceCloseAt,
+			&i.Open,
+			&i.High,
+			&i.Low,
+			&i.Close,
+			&i.Volume,
+			&i.QuoteVolume,
+			&i.TradeCount,
+			&i.TakerBuyVolume,
+			&i.TakerBuyQuoteVolume,
+			&i.SourceRetrievedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMarketCandlesByCanonicalSymbol = `-- name: ListMarketCandlesByCanonicalSymbol :many
 SELECT
     market_candles.id,

@@ -151,6 +151,7 @@ func newServer(
 	if len(liveMonitorStatusRegistries) > 0 {
 		liveMonitorStatusRegistry = liveMonitorStatusRegistries[0]
 	}
+	analyticsRepository := analyticsRepositoryFromConcrete(marketCandleRepository)
 	mux.HandleFunc("GET /api/v1/instruments", func(responseWriter http.ResponseWriter, request *http.Request) {
 		listInstrumentsHandler(responseWriter, request, instrumentRepository, instrumentSourceRepository)
 	})
@@ -159,6 +160,12 @@ func newServer(
 	// parsed and validated by the handler before it calls the repository.
 	mux.HandleFunc("GET /api/v1/candles", func(responseWriter http.ResponseWriter, request *http.Request) {
 		listCandlesHandler(responseWriter, request, marketCandleRepository)
+	})
+	mux.HandleFunc("GET /api/v1/analytics/market", func(responseWriter http.ResponseWriter, request *http.Request) {
+		listMarketAnalyticsHandler(responseWriter, request, analyticsRepository)
+	})
+	mux.HandleFunc("GET /api/v1/analytics/compare", func(responseWriter http.ResponseWriter, request *http.Request) {
+		compareMarketAnalyticsHandler(responseWriter, request, analyticsRepository)
 	})
 
 	// Phase 6.2 update: register macro dataset and observation read routes.

@@ -61,6 +61,11 @@ type Result struct {
 	Series  []SeriesPoint
 }
 
+type analyticsWindow struct {
+	from time.Time
+	to   time.Time
+}
+
 // ComparisonInput identifies one canonical instrument's candle series. The
 // caller is responsible for resolving the requested provider mapping before
 // passing candles into this provider-independent package.
@@ -91,6 +96,23 @@ type ComparisonSeries struct {
 // counts rather than calendar-day counts. Empty input is valid and returns an
 // empty result.
 func Calculate(candles []Candle) (Result, error) {
+	return calculate(candles, nil)
+}
+
+// CalculateWindow computes indicators using all supplied candles but returns
+// only the requested half-open time range. Earlier candles therefore warm up
+// moving averages and volatility without leaking outside-range points into the
+// API response or range-level summary.
+func CalculateWindow(candles []Candle, from, to time.Time) (Result, error) {
+	from = from.UTC()
+	to = to.UTC()
+	if !from.Before(to) {
+		return Result{}, fmt.Errorf("analytics window must have to after from")
+	}
+	return calculate(candles, &analyticsWindow{from: from, to: to})
+}
+
+func calculate(candles []Candle, window *analyticsWindow) (Result, error) {
 	normalized, closes, err := normalizeCandles(candles)
 	if err != nil {
 		return Result{}, err
@@ -146,7 +168,7 @@ func Calculate(candles []Candle) (Result, error) {
 	}
 
 	totalReturn := formatRat(subtractOne(divide(closes[len(closes)-1], firstClose)))
-	return Result{
+	result := Result{
 		Summary: Summary{
 			CandleCount:          len(normalized),
 			FirstObservedAt:      normalized[0].ObservedAt,
@@ -158,7 +180,11 @@ func Calculate(candles []Candle) (Result, error) {
 			AnnualizedVolatility: latestVolatility(series),
 		},
 		Series: series,
-	}, nil
+	}
+	if window == nil {
+		return result, nil
+	}
+	return applyWindow(result, normalized, closes, *window), nil
 }
 
 // Compare normalizes each non-empty instrument independently to a starting
@@ -257,6 +283,54 @@ func latestVolatility(series []SeriesPoint) *string {
 		}
 	}
 	return nil
+}
+
+func applyWindow(result Result, candles []Candle, closes []*big.Rat, window analyticsWindow) Result {
+	firstIndex := -1
+	lastIndex := -1
+	for index, candle := range candles {
+		if !candle.ObservedAt.Before(window.from) && candle.ObservedAt.Before(window.to) {
+			if firstIndex == -1 {
+				firstIndex = index
+			}
+			lastIndex = index
+		}
+	}
+	if firstIndex == -1 {
+		return Result{Series: []SeriesPoint{}}
+	}
+
+	visibleSeries := append([]SeriesPoint(nil), result.Series[firstIndex:lastIndex+1]...)
+	visibleCloses := closes[firstIndex : lastIndex+1]
+	runningHigh := new(big.Rat).Set(visibleCloses[0])
+	maximumDrawdown := new(big.Rat)
+	for index, closeValue := range visibleCloses {
+		visibleSeries[index].CumulativeReturn = stringPointer(formatRat(subtractOne(divide(closeValue, visibleCloses[0]))))
+		if index == 0 {
+			visibleSeries[index].PeriodReturn = nil
+		}
+		if closeValue.Cmp(runningHigh) > 0 {
+			runningHigh.Set(closeValue)
+		}
+		drawdown := subtractOne(divide(closeValue, runningHigh))
+		visibleSeries[index].Drawdown = stringPointer(formatRat(drawdown))
+		if drawdown.Cmp(maximumDrawdown) < 0 {
+			maximumDrawdown.Set(drawdown)
+		}
+	}
+
+	result.Summary = Summary{
+		CandleCount:          len(visibleCloses),
+		FirstObservedAt:      candles[firstIndex].ObservedAt,
+		LastObservedAt:       candles[lastIndex].ObservedAt,
+		FirstClose:           candles[firstIndex].Close,
+		LastClose:            candles[lastIndex].Close,
+		TotalReturn:          stringPointer(formatRat(subtractOne(divide(visibleCloses[len(visibleCloses)-1], visibleCloses[0])))),
+		MaximumDrawdown:      stringPointer(formatRat(maximumDrawdown)),
+		AnnualizedVolatility: latestVolatility(visibleSeries),
+	}
+	result.Series = visibleSeries
+	return result
 }
 
 func divide(left, right *big.Rat) *big.Rat {

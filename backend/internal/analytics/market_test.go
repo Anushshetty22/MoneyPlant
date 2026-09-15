@@ -59,6 +59,35 @@ func TestCalculateWarmupUsesObservationCount(t *testing.T) {
 	assertMetric(t, result.Series[50].Volatility20, "0.0000000000")
 }
 
+func TestCalculateWindowUsesLookbackForIndicators(t *testing.T) {
+	candles := make([]Candle, 0, 51)
+	for index := 0; index < 51; index++ {
+		candles = append(candles, Candle{
+			ObservedAt: time.Date(2026, 5, 1+index, 0, 0, 0, 0, time.UTC),
+			Close:      "100.00",
+		})
+	}
+	from := time.Date(2026, 5, 51, 0, 0, 0, 0, time.UTC)
+	to := from.Add(24 * time.Hour)
+
+	result, err := CalculateWindow(candles, from, to)
+	if err != nil {
+		t.Fatalf("calculate analytics window: %v", err)
+	}
+	if len(result.Series) != 1 || result.Summary.CandleCount != 1 {
+		t.Fatalf("window result = %#v, want one visible candle", result)
+	}
+	if result.Series[0].SMA50 == nil || result.Series[0].Volatility20 == nil {
+		t.Fatal("lookback candles did not warm up rolling metrics")
+	}
+	if result.Series[0].PeriodReturn != nil || result.Series[0].CumulativeReturn == nil || *result.Series[0].CumulativeReturn != "0.0000000000" {
+		t.Fatalf("window boundary returns = period=%v cumulative=%v, want nil/zero", result.Series[0].PeriodReturn, result.Series[0].CumulativeReturn)
+	}
+	if result.Series[0].ObservedAt != from {
+		t.Fatalf("visible timestamp = %s, want %s", result.Series[0].ObservedAt, from)
+	}
+}
+
 func TestCalculateVolatilityAndDrawdown(t *testing.T) {
 	candles := make([]Candle, 0, 22)
 	for index := 0; index < 22; index++ {
