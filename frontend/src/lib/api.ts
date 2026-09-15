@@ -46,6 +46,63 @@ export type Candle = {
   source_retrieved_at: string;
 };
 
+// MarketAnalytics contains on-demand daily calculations from the Phase 4
+// analytics API. Calculated decimals remain strings; nullable rolling metrics
+// indicate that their warm-up window is not available yet.
+export type MarketAnalytics = {
+  canonical_symbol: string;
+  provider: string;
+  interval: string;
+  from: string;
+  to: string;
+  summary: MarketAnalyticsSummary | null;
+  series: MarketAnalyticsPoint[];
+};
+
+export type MarketAnalyticsSummary = {
+  candle_count: number;
+  first_observed_at: string;
+  last_observed_at: string;
+  first_close: string;
+  last_close: string;
+  total_return: string | null;
+  maximum_drawdown: string | null;
+  annualized_volatility_20: string | null;
+};
+
+export type MarketAnalyticsPoint = {
+  observed_at: string;
+  close: string;
+  period_return: string | null;
+  cumulative_return: string | null;
+  sma_7: string | null;
+  sma_20: string | null;
+  sma_50: string | null;
+  volatility_20: string | null;
+  drawdown: string | null;
+};
+
+export type MarketComparison = {
+  provider: string;
+  interval: string;
+  from: string;
+  to: string;
+  series: MarketComparisonSeries[];
+};
+
+export type MarketComparisonSeries = {
+  canonical_symbol: string;
+  first_close: string;
+  last_close: string;
+  total_return: string | null;
+  series: MarketComparisonPoint[];
+};
+
+export type MarketComparisonPoint = {
+  observed_at: string;
+  normalized_close: string;
+};
+
 // MacroDataset describes the meaning and provenance of one macroeconomic
 // series. The dashboard uses it to label values correctly instead of displaying
 // an unexplained number.
@@ -115,6 +172,10 @@ type DataResponse<T> = {
   data: T[];
 };
 
+type SingleDataResponse<T> = {
+  data: T;
+};
+
 // The environment variable is read on the Next.js server for this first
 // server-rendered page. The fallback makes local development work even before
 // the developer copies .env.example into .env.local.
@@ -178,6 +239,60 @@ export async function listCandles(
   }
 
   const payload = (await response.json()) as DataResponse<Candle>;
+  return payload.data;
+}
+
+// listMarketAnalytics retrieves the calculated daily analytics for one
+// canonical instrument. The API performs the indicator warm-up lookback.
+export async function listMarketAnalytics(
+  symbol: string,
+  provider: string,
+  from: string,
+  to: string,
+  signal?: AbortSignal
+): Promise<MarketAnalytics> {
+  const query = new URLSearchParams({
+    symbol,
+    provider,
+    interval: "1d",
+    from: `${from}T00:00:00Z`,
+    to: `${to}T00:00:00Z`
+  });
+  const response = await fetch(`${browserAPIBaseURL}/api/v1/analytics/market?${query.toString()}`, {
+    cache: "no-store",
+    signal
+  });
+  if (!response.ok) {
+    throw new Error(`MoneyPlant API returned HTTP ${response.status}`);
+  }
+  const payload = (await response.json()) as SingleDataResponse<MarketAnalytics>;
+  return payload.data;
+}
+
+// listMarketComparison retrieves normalized performance for a selected group
+// of instruments that share one provider and daily interval.
+export async function listMarketComparison(
+  symbols: string[],
+  provider: string,
+  from: string,
+  to: string,
+  signal?: AbortSignal
+): Promise<MarketComparison> {
+  const query = new URLSearchParams({
+    symbols: symbols.join(","),
+    provider,
+    interval: "1d",
+    from: `${from}T00:00:00Z`,
+    to: `${to}T00:00:00Z`
+  });
+  const response = await fetch(`${browserAPIBaseURL}/api/v1/analytics/compare?${query.toString()}`, {
+    cache: "no-store",
+    signal
+  });
+  if (!response.ok) {
+    throw new Error(`MoneyPlant API returned HTTP ${response.status}`);
+  }
+  const payload = (await response.json()) as SingleDataResponse<MarketComparison>;
   return payload.data;
 }
 

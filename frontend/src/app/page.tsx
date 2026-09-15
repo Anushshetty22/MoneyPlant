@@ -1,4 +1,5 @@
 import MarketDashboard from "@/components/market-dashboard";
+import AnalyticsDashboard from "@/components/analytics-dashboard";
 import MacroDashboard from "@/components/macro-dashboard";
 import { listInstruments, type Instrument } from "@/lib/api";
 
@@ -40,7 +41,7 @@ export default async function Home() {
             </p>
           </div>
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
-            <span className="font-medium text-slate-800">Phase 3.12</span> · Multi-source live monitoring
+            <span className="font-medium text-slate-800">Phase 4.3</span> · Market analytics
           </div>
         </header>
 
@@ -50,6 +51,9 @@ export default async function Home() {
           <div className="mx-auto flex max-w-6xl gap-2 overflow-x-auto text-sm">
             <a href="#market-view" className="shrink-0 rounded-full px-4 py-2 font-medium text-slate-600 transition hover:bg-white hover:text-growth">
               Market data
+            </a>
+            <a href="#analytics-view" className="shrink-0 rounded-full px-4 py-2 font-medium text-slate-600 transition hover:bg-white hover:text-growth">
+              Analytics
             </a>
             <a href="#macro-view" className="shrink-0 rounded-full px-4 py-2 font-medium text-slate-600 transition hover:bg-white hover:text-growth">
               Macro indicators
@@ -75,6 +79,7 @@ export default async function Home() {
         ) : (
           <>
             <MarketDashboard instruments={instruments} />
+            <AnalyticsDashboard instruments={instruments} />
             <MacroDashboard />
           </>
         )}
