@@ -4,9 +4,12 @@ MoneyPlant is a local-first financial data engineering and analytics project. It
 
 ## Current milestone
 
-Phase 1 and Phase 2 are complete. Phase 3.12 now displays provider-aware live
-data for Binance and Angel One. It builds on Phase 3.11's dashboard stream,
-Phase 3.10's instrument mappings, and Phase 3.9's one-minute candle rollups.
+Phase 1 and Phase 2 are complete. Phase 3.13 completes the automated
+verification and documentation pass for provider-aware live data from Binance
+and Angel One. It builds on Phase 3.11's dashboard stream, Phase 3.10's
+instrument mappings, and Phase 3.9's one-minute candle rollups. Final live
+acceptance still requires the local credentials and market activity described
+in the completion checklist.
 The project is intentionally implemented incrementally, with each sub-phase
 producing a testable result and a short learning checkpoint.
 
@@ -46,12 +49,18 @@ producing a testable result and a short learning checkpoint.
   fallback for dashboard recovery.
 - Phase 3.12 uses authoritative provider mappings to show Binance and Angel One
   live data in the same dashboard card.
+- Phase 3.13 adds provider-flow integration tests, race/build verification
+  instructions, restart/reconnect documentation, and the Phase 3 completion
+  checklist.
 
 See [`docs/project-guide.md`](docs/project-guide.md) for the consolidated
 setup, architecture, database, API, troubleshooting, and Phase 2 guide.
 
 See [`docs/ingestion-runbook.md`](docs/ingestion-runbook.md) for the complete
 Phase 1 workflow and verification commands.
+
+See [`docs/phase-3-completion-checklist.md`](docs/phase-3-completion-checklist.md)
+for automated checks and the final local live-acceptance sequence.
 
 ## Repository layout
 

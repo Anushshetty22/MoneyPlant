@@ -14,7 +14,10 @@ The Go application has two responsibilities:
 2. Read-only REST endpoints for the dashboard, including optional live
    monitoring status and latest snapshots.
 
-Provider adapters should convert source-specific responses into common domain records before persistence.
+Provider adapters should convert source-specific responses into common domain
+records before persistence. The live path uses the same rule: Binance trade
+messages and Angel One binary packets are normalized before monitoring, storage,
+or HTTP delivery.
 
 Phase 3.1 freezes the shared market vocabulary in
 [`docs/phase-3-data-model.md`](phase-3-data-model.md). A canonical instrument
@@ -54,15 +57,36 @@ must use a named volume so container restarts do not remove data.
 - Macro observation: dated economic metric and value
 - Ingestion run: one attempt to load data from a provider or seed file
 
-## Planned component boundaries
+## Phase 3 component boundaries
 
 ```text
 Canonical instrument -> provider mapping -> provider adapter
         -> normalization/validation -> Repository -> PostgreSQL
 
-Binance WebSocket -> Normalized live event -> In-memory latest snapshot
-                                      |                  |
-                                      +-> status API     +-> PostgreSQL latest snapshot
+Binance WebSocket --------------------+
+                                     |
+Angel One multiplexed WebSocket ------+-> LiveMarketMonitor
+                                             |
+                  +--------------------------+--------------------------+
+                  |                          |                          |
+           latest snapshot             1-minute candles             live status
+        (memory + PostgreSQL)        (PostgreSQL upsert)          (status registry)
+                  |                          |                          |
+                  +--------------------------+--------------------------+
+                                             |
+                                      LiveStreamHub (SSE)
+                                             |
+                                      Next.js dashboard
 
 PostgreSQL -> Go query handlers -> JSON REST API -> Next.js charts
 ```
+
+The `instrument_sources` table is the authoritative bridge between a public
+canonical symbol such as `TCS` and provider identities such as `TCS-EQ` or an
+Angel One token. The dashboard selects that mapping from the API and does not
+hardcode provider-specific symbols.
+
+The live monitor remains useful when the market is closed: it can be running
+with zero new events. Snapshot freshness and provider lifecycle status are
+reported separately so a stale value is not automatically treated as a
+connection failure.

@@ -58,6 +58,9 @@ Use this file as a running project notebook. Keep entries short and practical.
 | 2026-09-12 | Use Quote mode for normalized Angel One trade events | LTP packets contain a price but no quantity, while the common MoneyPlant live-event contract requires both exact positive values |
 | 2026-09-12 | Share one Angel One WebSocket across the instrument token set | SmartAPI supports multiplexed token subscriptions, and one socket avoids treating six instruments as six independent connection lifecycles |
 | 2026-09-12 | Put heartbeat, token-to-canonical mapping, and malformed-packet tolerance inside the Angel One stream adapter | The generic monitor should receive normalized events and transport failures without knowing provider protocol details |
+| 2026-09-15 | Keep provider mappings authoritative in the backend and expose canonical-symbol filters | The dashboard can support new providers without learning provider-specific symbols or tokens |
+| 2026-09-15 | Use one filtered SSE hub for snapshot and status updates, with polling as fallback | Browsers get immediate updates while reconnects and unsupported streaming environments remain recoverable |
+| 2026-09-15 | Verify Binance and Angel One with local fakes before live acceptance | Protocol adapters can be tested without secrets or market hours; real credentials are reserved for the final operational check |
 
 ## Problems and solutions
 

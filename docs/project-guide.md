@@ -410,6 +410,9 @@ Phase 3.11 adds a filtered Server-Sent Events stream for snapshot and monitor
 status updates, with heartbeats and polling fallback for browser recovery.
 Phase 3.12 makes the dashboard multi-source, using authoritative mappings to
 display Binance and Angel One live values through the same UI.
+Phase 3.13 completes the automated provider-flow verification and documents the
+local acceptance sequence, including restart recovery, reconnect behavior, and
+the distinction between a healthy closed-market monitor and a stale value.
 Phase 3.1 froze the canonical/provider identity, provider capability,
 lifecycle status, and common error contracts; these are documented in
 [`docs/phase-3-data-model.md`](phase-3-data-model.md). The
@@ -447,4 +450,6 @@ idempotency behavior, and testing workflow remain stable.
 - `docs/phase-3.10-unified-instrument-snapshots.md` — canonical instrument and live snapshot APIs
 - `docs/phase-3.11-live-stream.md` — Server-Sent Events for dashboard updates
 - `docs/phase-3.12-dashboard-multi-source.md` — Binance and Angel One dashboard support
+- `docs/phase-3.13-end-to-end-verification.md` — final Phase 3 verification flow
+- `docs/phase-3-completion-checklist.md` — automated and local acceptance checklist
 - `docs/document-style-guide.md` — shared document formatting rules

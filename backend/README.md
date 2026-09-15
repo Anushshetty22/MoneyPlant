@@ -133,6 +133,30 @@ The dashboard now selects the authoritative provider source returned by
 symbols use the same live snapshot, status, and SSE flow; provider tokens and
 provider-specific symbols remain backend-only.
 
+## Phase 3.13 end-to-end verification
+
+The final Phase 3 verification keeps provider protocol tests offline and
+credential-free. Binance and Angel One adapter tests use local fakes, while
+provider-flow integration tests send normalized events through the common
+monitor, latest snapshot store, and one-minute candle aggregator.
+
+Run the backend checks from this directory:
+
+```bash
+go test ./...
+go test -race ./...
+```
+
+For the real local acceptance run, configure the four Angel One variables in
+`.env`, refresh the catalog, enable `LIVE_MONITOR_SYMBOLS` and
+`ANGEL_ONE_LIVE_MONITOR_SYMBOLS`, then start `go run ./cmd/api`. Inspect
+`/api/v1/live/statuses`, the filtered SSE endpoint, and the dashboard. A
+closed market can leave a monitor in `running` with no new events; restart
+recovery should restore the last durable snapshot and later accept new events.
+
+See [`docs/phase-3-completion-checklist.md`](../docs/phase-3-completion-checklist.md)
+for the full automated and local acceptance checklist.
+
 ## Phase 4.2 Binance ingestion command
 
 After PostgreSQL is running and migrations plus seed definitions have been applied,
