@@ -3,6 +3,8 @@ package httpapi
 import (
 	// net/http provides the response writer and status code constants.
 	"net/http"
+	// strings normalizes optional canonical/provider filters.
+	"strings"
 	// time formats status timestamps consistently with the snapshot endpoint.
 	"time"
 
@@ -54,17 +56,43 @@ func liveMonitorStatusHandler(
 // plural endpoint.
 func liveMonitorStatusCompatibilityHandler(
 	responseWriter http.ResponseWriter,
+	request *http.Request,
 	registry *ingestion.LiveMonitorStatusRegistry,
 	fallback *ingestion.LiveMonitorStatusStore,
 ) {
+	provider := strings.ToLower(strings.TrimSpace(request.URL.Query().Get("provider")))
+	canonicalSymbol := strings.ToUpper(strings.TrimSpace(request.URL.Query().Get("symbol")))
 	if registry != nil {
 		statuses := registry.List()
+		if provider != "" || canonicalSymbol != "" {
+			for _, status := range statuses {
+				if matchesLiveStatusFilter(status, provider, canonicalSymbol) {
+					writeJSON(responseWriter, http.StatusOK, map[string]any{"data": liveMonitorStatusResponseFrom(status)})
+					return
+				}
+			}
+			// A catalog source can be valid even when its live monitor is not
+			// configured. Return an explicit disabled state for the dashboard.
+			writeJSON(responseWriter, http.StatusOK, map[string]any{"data": liveMonitorStatusResponseFrom(ingestion.LiveMonitorStatus{
+				Enabled:         false,
+				Provider:        provider,
+				CanonicalSymbol: canonicalSymbol,
+				State:           ingestion.LiveMonitorStateDisabled,
+				UpdatedAt:       time.Now().UTC(),
+			})})
+			return
+		}
 		if len(statuses) > 0 {
 			writeJSON(responseWriter, http.StatusOK, map[string]any{"data": liveMonitorStatusResponseFrom(statuses[0])})
 			return
 		}
 	}
 	liveMonitorStatusHandler(responseWriter, fallback)
+}
+
+func matchesLiveStatusFilter(status ingestion.LiveMonitorStatus, provider, canonicalSymbol string) bool {
+	return (provider == "" || strings.EqualFold(status.Provider, provider)) &&
+		(canonicalSymbol == "" || strings.EqualFold(status.CanonicalSymbol, canonicalSymbol))
 }
 
 // liveMonitorStatusesHandler exposes every registered provider/symbol status.

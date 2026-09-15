@@ -191,7 +191,7 @@ func newServer(
 	// latest market value so an operator can distinguish stale data from a
 	// stopped or failed monitor.
 	mux.HandleFunc("GET /api/v1/live/status", func(responseWriter http.ResponseWriter, request *http.Request) {
-		liveMonitorStatusCompatibilityHandler(responseWriter, liveMonitorStatusRegistry, liveMonitorStatusStore)
+		liveMonitorStatusCompatibilityHandler(responseWriter, request, liveMonitorStatusRegistry, liveMonitorStatusStore)
 	})
 
 	// Phase 3.8 update: expose one status record per configured provider and

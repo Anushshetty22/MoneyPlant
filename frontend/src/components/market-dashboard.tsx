@@ -68,6 +68,7 @@ function formatLiveAge(value: string): string {
 // window, while this card shows the most recent individual trade.
 function LiveSnapshotCard({
   symbol,
+  provider,
   isSupported,
   snapshot,
   status,
@@ -75,6 +76,7 @@ function LiveSnapshotCard({
   error
 }: {
   symbol: string;
+  provider: string | null;
   isSupported: boolean;
   snapshot: LiveSnapshot | null;
   status: LiveMonitorStatus | null;
@@ -116,9 +118,9 @@ function LiveSnapshotCard({
     <div className="mt-6 rounded-2xl border border-teal-100 bg-teal-50/60 p-6 shadow-sm">
       <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-growth">Live monitor</p>
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-growth">Live monitor{provider ? ` · ${provider}` : ""}</p>
           <h3 className="mt-2 text-xl font-semibold text-ink">Latest trade</h3>
-          <p className="mt-1 text-sm text-slate-600">Refreshes every five seconds while this instrument is selected.</p>
+          <p className="mt-1 text-sm text-slate-600">Updates immediately through the live stream, with polling fallback.</p>
         </div>
         <span className="inline-flex items-center gap-2 text-xs font-medium text-slate-600">
           <span className={`h-2.5 w-2.5 rounded-full ${statusDotClass}`} />
@@ -128,7 +130,7 @@ function LiveSnapshotCard({
 
       {!isSupported ? (
         <p className="mt-5 text-sm text-slate-600">
-          Live Binance monitoring is currently available for crypto instruments only. Historical data remains available below.
+          No authoritative live provider source is configured for this instrument. Historical data remains available below.
         </p>
       ) : isLoading && !snapshot ? (
         <p className="mt-5 text-sm text-slate-600">Checking the live stream…</p>
@@ -164,7 +166,7 @@ function LiveSnapshotCard({
         </div>
       ) : (
         <p className="mt-5 text-sm text-slate-600">
-          No live snapshot is available. Start the API with <code className="rounded bg-white px-1 py-0.5">LIVE_MONITOR_SYMBOL={symbol}</code> to enable it.
+          No live snapshot is available yet for {symbol}. The provider monitor may be disabled or waiting for its first event.
         </p>
       )}
 
@@ -354,14 +356,14 @@ export default function MarketDashboard({ instruments }: { instruments: Instrume
     setLiveStatus(null);
     setLiveError(null);
 
-    if (!selectedSymbol || selectedInstrument?.asset_type !== "crypto") {
+    const liveProvider = selectedInstrument ? providerForInstrument(selectedInstrument) : null;
+    if (!selectedSymbol || !selectedInstrument || !liveProvider) {
       setIsLiveLoading(false);
       return;
     }
 
     let isCurrentRequest = true;
     const controller = new AbortController();
-    const liveProvider = selectedInstrument ? providerForInstrument(selectedInstrument) : undefined;
 
     // Fetch once immediately for fast initial rendering. The SSE connection
     // then pushes snapshots and status changes without waiting for the polling
@@ -372,7 +374,7 @@ export default function MarketDashboard({ instruments }: { instruments: Instrume
 
       Promise.all([
         listLiveSnapshots(selectedSymbol, liveProvider ?? undefined, controller.signal),
-        getLiveMonitorStatus(controller.signal)
+        getLiveMonitorStatus(selectedSymbol, liveProvider, controller.signal)
       ])
         .then(([snapshot, status]) => {
           if (isCurrentRequest) {
@@ -476,7 +478,8 @@ export default function MarketDashboard({ instruments }: { instruments: Instrume
 
       <LiveSnapshotCard
         symbol={selectedSymbol}
-        isSupported={selectedInstrument?.asset_type === "crypto"}
+        provider={selectedInstrument ? providerForInstrument(selectedInstrument) : null}
+        isSupported={Boolean(selectedInstrument && providerForInstrument(selectedInstrument))}
         snapshot={liveSnapshot}
         status={liveStatus}
         isLoading={isLiveLoading}

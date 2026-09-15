@@ -132,4 +132,24 @@ func TestLiveMonitorStatusesEndpointReturnsIndependentProviderStates(t *testing.
 	if envelope.Data[1].Provider != "binance" || envelope.Data[1].Canonical != "BTCUSDT" || envelope.Data[1].State != ingestion.LiveMonitorStateRunning {
 		t.Fatalf("second status = %#v", envelope.Data[1])
 	}
+
+	request = httptest.NewRequest(http.MethodGet, "/api/v1/live/status?symbol=NIFTY50&provider=angel_one", nil)
+	responseRecorder = httptest.NewRecorder()
+	server.Handler.ServeHTTP(responseRecorder, request)
+	if responseRecorder.Code != http.StatusOK {
+		t.Fatalf("filtered status = %d, want %d", responseRecorder.Code, http.StatusOK)
+	}
+	var filtered struct {
+		Data struct {
+			Provider       string `json:"provider"`
+			Canonical      string `json:"canonical_symbol"`
+			ProviderSymbol string `json:"provider_symbol"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(responseRecorder.Body).Decode(&filtered); err != nil {
+		t.Fatalf("decode filtered status: %v", err)
+	}
+	if filtered.Data.Provider != "angel_one" || filtered.Data.Canonical != "NIFTY50" || filtered.Data.ProviderSymbol != "Nifty 50" {
+		t.Fatalf("filtered status = %#v", filtered.Data)
+	}
 }

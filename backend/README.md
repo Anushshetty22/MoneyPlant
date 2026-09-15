@@ -126,6 +126,13 @@ Events connection with `snapshot`, `status`, and periodic `heartbeat` events.
 Each browser subscriber is isolated, and disconnecting one client does not
 affect the provider monitor or other subscribers.
 
+## Phase 3.12 dashboard multi-source support
+
+The dashboard now selects the authoritative provider source returned by
+`/api/v1/instruments` for every instrument. Binance crypto and Angel One equity
+symbols use the same live snapshot, status, and SSE flow; provider tokens and
+provider-specific symbols remain backend-only.
+
 ## Phase 4.2 Binance ingestion command
 
 After PostgreSQL is running and migrations plus seed definitions have been applied,

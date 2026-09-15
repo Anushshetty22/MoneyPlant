@@ -408,6 +408,8 @@ symbol/provider filtering for live snapshots, so frontend code does not need to
 know provider-specific symbols or tokens.
 Phase 3.11 adds a filtered Server-Sent Events stream for snapshot and monitor
 status updates, with heartbeats and polling fallback for browser recovery.
+Phase 3.12 makes the dashboard multi-source, using authoritative mappings to
+display Binance and Angel One live values through the same UI.
 Phase 3.1 froze the canonical/provider identity, provider capability,
 lifecycle status, and common error contracts; these are documented in
 [`docs/phase-3-data-model.md`](phase-3-data-model.md). The
@@ -444,4 +446,5 @@ idempotency behavior, and testing workflow remain stable.
 - `docs/phase-3.9-live-candles.md` — latest snapshots and one-minute candle rollups
 - `docs/phase-3.10-unified-instrument-snapshots.md` — canonical instrument and live snapshot APIs
 - `docs/phase-3.11-live-stream.md` — Server-Sent Events for dashboard updates
+- `docs/phase-3.12-dashboard-multi-source.md` — Binance and Angel One dashboard support
 - `docs/document-style-guide.md` — shared document formatting rules

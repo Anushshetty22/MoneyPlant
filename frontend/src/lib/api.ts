@@ -265,8 +265,20 @@ export function liveStreamURL(symbol: string, provider?: string): string {
 // getLiveMonitorStatus loads operational metadata for the selected backend
 // monitor. It is separate from listLiveSnapshots because a monitor can be
 // running before its first event arrives, or stopped after its last snapshot.
-export async function getLiveMonitorStatus(signal?: AbortSignal): Promise<LiveMonitorStatus> {
-  const response = await fetch(`${browserAPIBaseURL}/api/v1/live/status`, {
+export async function getLiveMonitorStatus(
+  symbol?: string,
+  provider?: string,
+  signal?: AbortSignal
+): Promise<LiveMonitorStatus> {
+  const query = new URLSearchParams();
+  if (symbol) {
+    query.set("symbol", symbol);
+  }
+  if (provider) {
+    query.set("provider", provider);
+  }
+  const queryString = query.toString();
+  const response = await fetch(`${browserAPIBaseURL}/api/v1/live/status${queryString ? `?${queryString}` : ""}`, {
     cache: "no-store",
     signal
   });
