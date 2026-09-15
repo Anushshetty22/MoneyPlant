@@ -143,6 +143,22 @@ func TestCalculateRejectsInvalidAndDuplicateCandles(t *testing.T) {
 	}
 }
 
+func TestCalculateSortsCandlesWithoutFillingCalendarGaps(t *testing.T) {
+	base := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	result, err := Calculate([]Candle{
+		{ObservedAt: base.Add(48 * time.Hour), Close: "120.0000000000"},
+		{ObservedAt: base, Close: "100.0000000000"},
+		{ObservedAt: base.Add(24 * time.Hour), Close: "110.0000000000"},
+	})
+	if err != nil {
+		t.Fatalf("calculate unordered candles: %v", err)
+	}
+	if len(result.Series) != 3 || !result.Series[0].ObservedAt.Equal(base) || !result.Series[2].ObservedAt.Equal(base.Add(48*time.Hour)) {
+		t.Fatalf("series timestamps = %#v, want chronological order", result.Series)
+	}
+	assertMetric(t, result.Series[2].CumulativeReturn, "0.2000000000")
+}
+
 func TestCompareNormalizesEachSeries(t *testing.T) {
 	base := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
 	result, err := Compare([]ComparisonInput{

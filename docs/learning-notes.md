@@ -61,6 +61,9 @@ Use this file as a running project notebook. Keep entries short and practical.
 | 2026-09-15 | Keep provider mappings authoritative in the backend and expose canonical-symbol filters | The dashboard can support new providers without learning provider-specific symbols or tokens |
 | 2026-09-15 | Use one filtered SSE hub for snapshot and status updates, with polling as fallback | Browsers get immediate updates while reconnects and unsupported streaming environments remain recoverable |
 | 2026-09-15 | Verify Binance and Angel One with local fakes before live acceptance | Protocol adapters can be tested without secrets or market hours; real credentials are reserved for the final operational check |
+| 2026-09-15 | Compute first-generation analytics on demand instead of storing derived tables | The calculation rules are still being learned, and recomputing from canonical candles avoids stale derived data and a scheduler dependency |
+| 2026-09-15 | Use bounded historical lookback for rolling indicators | The API can return only the requested range while still warming SMA and volatility windows correctly |
+| 2026-09-15 | Keep analytics ratios as decimal strings at the HTTP boundary | Browser charts may use numbers for screen coordinates, but the API contract does not silently round financial values during transport |
 
 ## Problems and solutions
 

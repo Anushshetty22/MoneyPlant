@@ -157,6 +157,31 @@ recovery should restore the last durable snapshot and later accept new events.
 See [`docs/phase-3-completion-checklist.md`](../docs/phase-3-completion-checklist.md)
 for the full automated and local acceptance checklist.
 
+## Phase 4 market analytics
+
+The provider-independent analytics engine calculates daily returns, cumulative
+performance, SMA 7/20/50, annualized 20-observation volatility, drawdown, and
+normalized comparisons. The API computes these values on demand from stored
+daily candles; it does not create derived tables or scheduled jobs.
+
+```bash
+curl 'http://localhost:8080/api/v1/analytics/market?symbol=BTCUSDT&provider=binance&interval=1d&from=2026-08-01T00:00:00Z&to=2026-09-01T00:00:00Z'
+
+curl 'http://localhost:8080/api/v1/analytics/compare?symbols=BTCUSDT,ETHUSDT&provider=binance&interval=1d&from=2026-08-01T00:00:00Z&to=2026-09-01T00:00:00Z'
+```
+
+The market endpoint fetches up to 50 earlier daily candles for rolling-window
+warm-up but returns only the requested range. See
+[`docs/phase-4-market-analytics.md`](../docs/phase-4-market-analytics.md) for
+the formulas, response fields, and empty-data behavior.
+
+Run the backend verification from this directory:
+
+```bash
+go test ./...
+go test -race ./internal/analytics ./internal/httpapi ./internal/database
+```
+
 ## Phase 4.2 Binance ingestion command
 
 After PostgreSQL is running and migrations plus seed definitions have been applied,

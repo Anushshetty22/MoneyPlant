@@ -79,6 +79,9 @@ Angel One multiplexed WebSocket ------+-> LiveMarketMonitor
                                       Next.js dashboard
 
 PostgreSQL -> Go query handlers -> JSON REST API -> Next.js charts
+
+PostgreSQL daily candles -> on-demand analytics engine -> analytics REST API
+                                      -> dedicated Analytics dashboard view
 ```
 
 The `instrument_sources` table is the authoritative bridge between a public
@@ -90,3 +93,7 @@ The live monitor remains useful when the market is closed: it can be running
 with zero new events. Snapshot freshness and provider lifecycle status are
 reported separately so a stale value is not automatically treated as a
 connection failure.
+
+Phase 4 analytics is deliberately computed on demand from normalized candles.
+The engine uses exact rational arithmetic for ratios and fixed decimal strings
+at the API boundary; it does not create a second derived-data warehouse.

@@ -15,6 +15,8 @@ This step creates:
 - Interactive daily closing-price and volume charts
 - Macro dataset selection and date-filtered time-series charts
 - In-page navigation and source/retrieval context
+- Dedicated Analytics view with daily returns, moving averages, volatility,
+  drawdown, and normalized instrument comparison
 
 ## Run locally
 
@@ -42,3 +44,8 @@ you select an instrument and date range for `GET /api/v1/candles`. It also loads
 macro dataset definitions and observations from the macro API endpoints. The
 charts are drawn with SVG so the mapping from API values to screen coordinates
 is visible.
+
+The Analytics section calls `/api/v1/analytics/market` and
+`/api/v1/analytics/compare`. It keeps the exact decimal strings from the API at
+the client boundary and converts values to numbers only when mapping them to
+SVG coordinates.

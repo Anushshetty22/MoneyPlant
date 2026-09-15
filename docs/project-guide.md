@@ -413,6 +413,10 @@ display Binance and Angel One live values through the same UI.
 Phase 3.13 completes the automated provider-flow verification and documents the
 local acceptance sequence, including restart recovery, reconnect behavior, and
 the distinction between a healthy closed-market monitor and a stale value.
+Phase 4.1 adds provider-independent daily market calculations. Phase 4.2
+exposes them through `/api/v1/analytics/market` and
+`/api/v1/analytics/compare`. Phase 4.3 adds a dedicated Analytics dashboard,
+and Phase 4.4 documents the formulas, limitations, and completion checks.
 Phase 3.1 froze the canonical/provider identity, provider capability,
 lifecycle status, and common error contracts; these are documented in
 [`docs/phase-3-data-model.md`](phase-3-data-model.md). The
@@ -452,4 +456,6 @@ idempotency behavior, and testing workflow remain stable.
 - `docs/phase-3.12-dashboard-multi-source.md` — Binance and Angel One dashboard support
 - `docs/phase-3.13-end-to-end-verification.md` — final Phase 3 verification flow
 - `docs/phase-3-completion-checklist.md` — automated and local acceptance checklist
+- `docs/phase-4-market-analytics.md` — analytics API and calculation rules
+- `docs/phase-4-completion-checklist.md` — Phase 4 verification and acceptance
 - `docs/document-style-guide.md` — shared document formatting rules

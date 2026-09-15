@@ -4,12 +4,10 @@ MoneyPlant is a local-first financial data engineering and analytics project. It
 
 ## Current milestone
 
-Phase 1 and Phase 2 are complete. Phase 3.13 completes the automated
-verification and documentation pass for provider-aware live data from Binance
-and Angel One. It builds on Phase 3.11's dashboard stream, Phase 3.10's
-instrument mappings, and Phase 3.9's one-minute candle rollups. Final live
-acceptance still requires the local credentials and market activity described
-in the completion checklist.
+Phase 1, Phase 2, and Phase 3 are complete. Phase 4.4 completes the market
+analytics foundation: exact daily calculations, read-only analytics APIs, a
+dedicated dashboard view, and verification documentation. Final local
+acceptance is tracked in the Phase 4 checklist.
 The project is intentionally implemented incrementally, with each sub-phase
 producing a testable result and a short learning checkpoint.
 
@@ -52,6 +50,14 @@ producing a testable result and a short learning checkpoint.
 - Phase 3.13 adds provider-flow integration tests, race/build verification
   instructions, restart/reconnect documentation, and the Phase 3 completion
   checklist.
+- Phase 4.1 adds exact provider-independent returns, moving averages, volatility,
+  drawdown, and normalized comparison calculations.
+- Phase 4.2 exposes market analytics and comparison REST endpoints with bounded
+  lookback warm-up.
+- Phase 4.3 adds the dedicated Analytics dashboard view without changing live
+  monitoring.
+- Phase 4.4 adds final tests, formulas, API documentation, and the Phase 4
+  completion checklist.
 
 See [`docs/project-guide.md`](docs/project-guide.md) for the consolidated
 setup, architecture, database, API, troubleshooting, and Phase 2 guide.
@@ -61,6 +67,9 @@ Phase 1 workflow and verification commands.
 
 See [`docs/phase-3-completion-checklist.md`](docs/phase-3-completion-checklist.md)
 for automated checks and the final local live-acceptance sequence.
+
+See [`docs/phase-4-completion-checklist.md`](docs/phase-4-completion-checklist.md)
+for analytics verification and local dashboard acceptance.
 
 ## Repository layout
 
